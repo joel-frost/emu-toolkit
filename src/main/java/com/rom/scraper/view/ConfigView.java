@@ -39,7 +39,7 @@ public class ConfigView {
         // Download folder selection
         HBox folderBox = createFolderBox();
 
-        // Region and file extension options in one row
+        // File extension and region options in one row
         HBox optionsBox = createOptionsBox();
 
         // Add all components to the panel
@@ -92,13 +92,6 @@ public class ConfigView {
         HBox optionsBox = new HBox(20);
         optionsBox.setAlignment(Pos.CENTER_LEFT);
 
-        // Region selector
-        Label regionLabel = new Label("Region:");
-        regionSelector = new ComboBox<>();
-        regionSelector.setPrefWidth(100);
-        regionSelector.itemsProperty().bind(viewModel.availableRegionsProperty());
-        regionSelector.valueProperty().bindBidirectional(viewModel.selectedRegionProperty());
-
         // File extension UI components
         Label extLabel = new Label("File Extension:");
 
@@ -132,9 +125,17 @@ public class ConfigView {
             }
         });
 
-        // Add all components to options box
-        optionsBox.getChildren().addAll(regionLabel, regionSelector, extLabel, fileExtensionSelector,
-                customExtensionCheckbox, customExtensionField);
+        // Region selector - moved to the right
+        Label regionLabel = new Label("Region:");
+        regionSelector = new ComboBox<>();
+        regionSelector.setPrefWidth(100);
+        regionSelector.itemsProperty().bind(viewModel.availableRegionsProperty());
+        regionSelector.valueProperty().bindBidirectional(viewModel.selectedRegionProperty());
+
+        // Add all components to options box - region at the end
+        optionsBox.getChildren().addAll(extLabel, fileExtensionSelector,
+                customExtensionCheckbox, customExtensionField,
+                regionLabel, regionSelector);
         return optionsBox;
     }
 
