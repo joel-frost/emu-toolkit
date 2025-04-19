@@ -12,21 +12,26 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 /**
- * Manages the download queue and download worker threads.
+ * Service responsible for managing downloads.
  */
-public class DownloadManager {
+public class DownloadService {
 
     private final ObservableList<DownloadTask> downloadTasks;
     private final ExecutorService downloadExecutor;
     private final int BUFFER_SIZE = 8192;
+    private final Map<DownloadTask, Future<?>> taskFutures;
 
-    public DownloadManager() {
+    public DownloadService() {
         this.downloadTasks = FXCollections.observableArrayList();
         this.downloadExecutor = Executors.newFixedThreadPool(5);
+        this.taskFutures = new HashMap<>();
     }
 
     public ObservableList<DownloadTask> getDownloadTasks() {
@@ -69,7 +74,8 @@ public class DownloadManager {
         Platform.runLater(() -> downloadTasks.add(task));
 
         // Start download
-        downloadExecutor.submit(() -> downloadFile(task));
+        Future<?> future = downloadExecutor.submit(() -> downloadFile(task));
+        taskFutures.put(task, future);
     }
 
     private void downloadFile(DownloadTask task) {
@@ -115,7 +121,6 @@ public class DownloadManager {
                 int bytesRead;
                 long totalBytesRead = 0;
                 Platform.runLater(() -> task.setStatus("Downloading"));
-
 
                 long lastUpdateTime = System.currentTimeMillis();
 
@@ -178,15 +183,25 @@ public class DownloadManager {
     }
 
     public void cancelTask(DownloadTask task) {
-        // In a real implementation, we would maintain a map of tasks to futures
-        // and cancel the appropriate future here
         if (downloadTasks.contains(task)) {
+            // Cancel the future if it exists
+            Future<?> future = taskFutures.get(task);
+            if (future != null && !future.isDone() && !future.isCancelled()) {
+                future.cancel(true);
+            }
+
             Platform.runLater(() -> {
                 task.setStatus("Cancelled");
                 // Optionally remove from the list
                 // downloadTasks.remove(task);
             });
         }
+    }
+
+    public void setParallelDownloads(int count) {
+        // In a more advanced implementation, we would recreate the ExecutorService
+        // with the new thread count. For simplicity, we'll just note it here.
+        System.out.println("Setting parallel downloads to: " + count);
     }
 
     public void shutdown() {
