@@ -16,7 +16,7 @@
     </properties>
 
     <dependencies>
-        <!-- JavaFX dependencies -->
+        <!-- JavaFX Dependencies -->
         <dependency>
             <groupId>org.openjfx</groupId>
             <artifactId>javafx-controls</artifactId>
@@ -28,16 +28,11 @@
             <version>${javafx.version}</version>
         </dependency>
 
-        <!-- Jsoup for HTML parsing -->
+        <!-- Other Dependencies -->
         <dependency>
             <groupId>org.jsoup</groupId>
             <artifactId>jsoup</artifactId>
             <version>1.15.3</version>
-        </dependency>
-        <dependency>
-            <groupId>io.github.mkpaz</groupId>
-            <artifactId>atlantafx-base</artifactId>
-            <version>2.0.1</version>
         </dependency>
     </dependencies>
 
@@ -54,37 +49,97 @@
                 </configuration>
             </plugin>
 
-            <!-- JavaFX Maven Plugin -->
+            <!-- Exec Maven Plugin for jpackage -->
             <plugin>
-                <groupId>org.openjfx</groupId>
-                <artifactId>javafx-maven-plugin</artifactId>
-                <version>0.0.8</version>
-                <configuration>
-                    <mainClass>com.rom.scraper.service.RomScraper</mainClass>
-                </configuration>
-            </plugin>
-
-            <!-- Maven Shade Plugin for creating executable jar -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-shade-plugin</artifactId>
-                <version>3.4.1</version>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.1.0</version>
                 <executions>
                     <execution>
+                        <id>create-installers</id>
                         <phase>package</phase>
                         <goals>
-                            <goal>shade</goal>
+                            <goal>exec</goal>
                         </goals>
                         <configuration>
-                            <transformers>
-                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                                    <mainClass>com.rom.scraper.Launcher</mainClass>
-                                </transformer>
-                            </transformers>
+                            <executable>jpackage</executable>
+                            <arguments>
+                                <!-- Shared Arguments -->
+                                <argument>--input</argument>
+                                <argument>${project.build.directory}</argument>
+                                <argument>--main-jar</argument>
+                                <argument>${project.build.finalName}.jar</argument>
+                                <argument>--main-class</argument>
+                                <argument>com.rom.scraper.Launcher</argument>
+                                <argument>--name</argument>
+                                <argument>RomScraper</argument>
+
+                                <!-- Platform-Specific Type -->
+                                <argument>--type</argument>
+                                <argument>${jpackage.type}</argument>
+
+                                <!-- Output Directory -->
+                                <argument>--output</argument>
+                                <argument>${project.build.directory}/installers</argument>
+                            </arguments>
                         </configuration>
                     </execution>
                 </executions>
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!-- Profile for Windows -->
+        <profile>
+            <id>windows</id>
+            <activation>
+                <os>
+                    <family>Windows</family>
+                </os>
+            </activation>
+            <properties>
+                <jpackage.type>exe</jpackage.type>
+            </properties>
+        </profile>
+
+        <!-- Profile for macOS -->
+        <profile>
+            <id>mac</id>
+            <activation>
+                <os>
+                    <family>Mac</family>
+                </os>
+            </activation>
+            <properties>
+                <jpackage.type>app-image</jpackage.type>
+            </properties>
+        </profile>
+
+        <!-- Profile for Linux (DEB) -->
+        <profile>
+            <id>linux-deb</id>
+            <activation>
+                <os>
+                    <family>Linux</family>
+                </os>
+            </activation>
+            <properties>
+                <jpackage.type>deb</jpackage.type>
+            </properties>
+        </profile>
+
+        <!-- Profile for Linux (RPM) -->
+        <profile>
+            <id>linux-rpm</id>
+            <activation>
+                <os>
+                    <family>Linux</family>
+                </os>
+            </activation>
+            <properties>
+                <jpackage.type>rpm</jpackage.type>
+            </properties>
+        </profile>
+    </profiles>
 </project>
