@@ -122,7 +122,9 @@ public class MainViewController {
         folderBox.setAlignment(Pos.CENTER_LEFT); // Align elements in the folder selection
         Label folderLabel = new Label("Download Folder:");
         downloadFolderField = new TextField();
-        downloadFolderField.setPromptText("e.g., snes");
+        downloadFolderField.setPromptText("Select download folder using Browse button");
+        downloadFolderField.setEditable(false); // Make read-only
+        downloadFolderField.setPrefWidth(400);
         Button browseButton = new Button("Browse");
         browseButton.setOnAction(e -> browseFolder());
         folderBox.getChildren().addAll(folderLabel, downloadFolderField, browseButton);
@@ -498,7 +500,7 @@ public class MainViewController {
 
     private boolean validateFolder(String folder) {
         if (folder.isEmpty()) {
-            showError("Error", "Please specify a download folder.");
+            showError("Download Folder Required", "Please select a download folder using the Browse button before proceeding.");
             return false;
         }
 
