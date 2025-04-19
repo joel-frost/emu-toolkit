@@ -1,123 +1,230 @@
-name: Build & Release
+name: Build and Release
 
 on:
   push:
     branches:
-      - 'release/**'
+      - 'releases/**'
 
 jobs:
-  build:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      - name: Cache Maven dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.m2
-          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
-          restore-keys: |
-            ${{ runner.os }}-maven
-
-      - name: Build with Maven
-        run: mvn clean package
-
-      - name: Extract version
-        id: version
-        run: echo "VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)" >> $GITHUB_ENV
-
-      - name: Prepare Artifacts
-        run: |
-          mkdir artifacts
-          cp target/*.jar artifacts/romscraper-${{ env.VERSION }}.jar
-
-          # Find the runnable folder (which starts with the app name)
-          bundle_dir=$(find target/runnables -maxdepth 1 -type d -name "RomScraper*")
-
-          if [[ "$RUNNER_OS" == "Linux" ]]; then
-            zip -r artifacts/romscraper-${{ env.VERSION }}-linux.zip "$bundle_dir"
-          elif [[ "$RUNNER_OS" == "Windows" ]]; then
-            7z a artifacts/romscraper-${{ env.VERSION }}-windows.zip "$bundle_dir"
-          elif [[ "$RUNNER_OS" == "macOS" ]]; then
-            ditto -c -k --sequesterRsrc --keepParent "$bundle_dir" artifacts/romscraper-${{ env.VERSION }}-macos.zip
-          fi
-
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: romscraper-${{ runner.os }}
-          path: artifacts/
-
-  release:
-    needs: build
+  update-version:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.set-version.outputs.version }}
+      release_title: ${{ steps.set-version.outputs.release_title }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
+      - name: Checkout code
+        uses: actions/checkout@v3
         with:
-          path: downloaded/
+          fetch-depth: 0
 
-      - name: Extract version
-        id: version
-        run: echo "VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)" >> $GITHUB_ENV
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
 
-      - name: Generate Changelog
-        id: changelog
+      - name: Get previous version
+        id: get-version
         run: |
+          CURRENT_VERSION=$(grep -o '<version>.*</version>' pom.xml | head -1 | sed 's/<version>\(.*\)<\/version>/\1/')
+          echo "Current version: $CURRENT_VERSION"
+          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Increment version
+        id: set-version
+        run: |
+          CURRENT_VERSION=${{ steps.get-version.outputs.current_version }}
+          
+          # Remove SNAPSHOT if present
+          VERSION_BASE=${CURRENT_VERSION/-SNAPSHOT/}
+          
+          # Split version
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION_BASE"
+          
+          # Increment patch version
+          NEW_PATCH=$((PATCH + 1))
+          NEW_VERSION="$MAJOR.$MINOR.$NEW_PATCH"
+          
+          # Update POM file
+          sed -i "s/<version>$CURRENT_VERSION<\/version>/<version>$NEW_VERSION<\/version>/" pom.xml
+          
+          # Get commit messages since last tag
           LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
           if [ -n "$LAST_TAG" ]; then
-            LOG=$(git log $LAST_TAG..HEAD --pretty=format:"- %s")
+            CHANGELOG=$(git log --pretty=format:"- %s" $LAST_TAG..HEAD)
           else
-            LOG=$(git log --pretty=format:"- %s")
+            CHANGELOG=$(git log --pretty=format:"- %s")
           fi
-          echo "CHANGELOG<<EOF" >> $GITHUB_ENV
-          echo "$LOG" >> $GITHUB_ENV
+          
+          # Store version and changelog
+          echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "release_title=v$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "changelog<<EOF" >> $GITHUB_ENV
+          echo "$CHANGELOG" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
 
-      - name: Create GitLab Release
-        env:
-          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+      - name: Commit and push updated version
         run: |
-          PROJECT_ID=<YOUR_PROJECT_ID> # <- replace this with your GitLab numeric project ID
-
-          # Create release
-          curl --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
-               --data "name=Release $VERSION" \
-               --data "tag_name=$VERSION" \
-               --data-urlencode "description=${{ env.CHANGELOG }}" \
-               --request POST "https://gitlab.com/api/v4/projects/${PROJECT_ID}/releases"
-
-          # Upload files
-          for f in downloaded/**; do
-            [ -f "$f" ] && curl --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
-              --upload-file "$f" \
-              "https://gitlab.com/api/v4/projects/${PROJECT_ID}/uploads"
-          done
-
-      - name: Bump version
-        run: |
-          CURRENT=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-          BASE=$(echo $CURRENT | awk -F. '{print $1 "." $2}')
-          PATCH=$(echo $CURRENT | awk -F. '{print $3 + 1}')
-          NEW_VERSION="${BASE}.${PATCH}-SNAPSHOT"
-
-          mvn versions:set -DnewVersion=$NEW_VERSION
-          mvn versions:commit
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-          git commit -am "Bump version to $NEW_VERSION"
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add pom.xml
+          git commit -m "Update version to ${{ env.NEW_VERSION }}"
+          git tag "v${{ env.NEW_VERSION }}"
           git push
+          git push --tags
+
+  build-jar:
+    needs: update-version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          ref: refs/tags/v${{ needs.update-version.outputs.version }}
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Build JAR
+        run: mvn clean package -DskipTests
+
+      - name: Upload JAR artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: jar-artifact
+          path: target/*.jar
+
+  build-windows:
+    needs: [update-version, build-jar]
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          ref: refs/tags/v${{ needs.update-version.outputs.version }}
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Build Windows executable
+        run: |
+          mvn clean package -DskipTests
+          mvn org.panteleyev:jpackage-maven-plugin:jpackage -Djpackage.type=app-image
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: windows-artifact
+          path: target/dist/RomScraper
+
+  build-macos:
+    needs: [update-version, build-jar]
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          ref: refs/tags/v${{ needs.update-version.outputs.version }}
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Build macOS app
+        run: |
+          mvn clean package -DskipTests
+          mvn org.panteleyev:jpackage-maven-plugin:jpackage -Djpackage.type=app-image
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: macos-artifact
+          path: target/dist/RomScraper.app
+
+  build-linux:
+    needs: [update-version, build-jar]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          ref: refs/tags/v${{ needs.update-version.outputs.version }}
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Build Linux package
+        run: |
+          mvn clean package -DskipTests
+          mvn org.panteleyev:jpackage-maven-plugin:jpackage -Djpackage.type=app-image
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: linux-artifact
+          path: target/dist/RomScraper
+
+  create-release:
+    needs: [update-version, build-jar, build-windows, build-macos, build-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+
+      - name: Rename artifacts with version
+        run: |
+          VERSION="${{ needs.update-version.outputs.version }}"
+          mkdir -p release-files
+          
+          # Rename JAR
+          find artifacts/jar-artifact -name "*.jar" -exec cp {} release-files/rom-scraper-${VERSION}.jar \;
+          
+          # Package Windows executable
+          if [ -d "artifacts/windows-artifact/RomScraper" ]; then
+            cd artifacts/windows-artifact
+            zip -r ../../release-files/RomScraper-${VERSION}-windows.zip RomScraper
+            cd ../..
+          fi
+          
+          # Package macOS app
+          if [ -d "artifacts/macos-artifact/RomScraper.app" ]; then
+            cd artifacts/macos-artifact
+            zip -r ../../release-files/RomScraper-${VERSION}-macos.zip RomScraper.app
+            cd ../..
+          fi
+          
+          # Package Linux executable
+          if [ -d "artifacts/linux-artifact/RomScraper" ]; then
+            cd artifacts/linux-artifact
+            tar -czf ../../release-files/RomScraper-${VERSION}-linux.tar.gz RomScraper
+            cd ../..
+          fi
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ needs.update-version.outputs.version }}
+          name: ${{ needs.update-version.outputs.release_title }}
+          body: ${{ env.CHANGELOG }}
+          files: release-files/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
