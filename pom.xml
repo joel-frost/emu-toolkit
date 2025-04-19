@@ -1,4 +1,3 @@
-<?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
@@ -39,7 +38,6 @@
             <artifactId>atlantafx-base</artifactId>
             <version>2.0.1</version>
         </dependency>
-
     </dependencies>
 
     <build>
@@ -70,27 +68,16 @@
                         <configuration>
                             <executable>jpackage</executable>
                             <arguments>
-                                <!-- Input Directory -->
                                 <argument>--input</argument>
-                                <argument>${project.build.directory}</argument>
-
-                                <!-- Output Directory -->
+                                <argument>${project.build.directory}/output</argument>
                                 <argument>--dest</argument>
                                 <argument>${project.build.directory}/runnables</argument>
-
-                                <!-- Application Name -->
                                 <argument>--name</argument>
                                 <argument>RomScraper</argument>
-
-                                <!-- Main Application JAR -->
                                 <argument>--main-jar</argument>
                                 <argument>${project.build.finalName}.jar</argument>
-
-                                <!-- Main Class -->
                                 <argument>--main-class</argument>
                                 <argument>com.rom.scraper.Launcher</argument>
-
-                                <!-- Output Type -->
                                 <argument>--type</argument>
                                 <argument>app-image</argument>
                             </arguments>
@@ -102,7 +89,7 @@
     </build>
 
     <profiles>
-        <!-- Profile for Windows -->
+        <!-- Profiles for platform-specific builds -->
         <profile>
             <id>windows</id>
             <activation>
@@ -115,7 +102,6 @@
             </properties>
         </profile>
 
-        <!-- Profile for macOS -->
         <profile>
             <id>mac</id>
             <activation>
@@ -128,9 +114,8 @@
             </properties>
         </profile>
 
-        <!-- Profile for Linux (DEB) -->
         <profile>
-            <id>linux-deb</id>
+            <id>linux</id>
             <activation>
                 <os>
                     <family>Linux</family>
@@ -138,19 +123,6 @@
             </activation>
             <properties>
                 <jpackage.type>deb</jpackage.type>
-            </properties>
-        </profile>
-
-        <!-- Profile for Linux (RPM) -->
-        <profile>
-            <id>linux-rpm</id>
-            <activation>
-                <os>
-                    <family>Linux</family>
-                </os>
-            </activation>
-            <properties>
-                <jpackage.type>rpm</jpackage.type>
             </properties>
         </profile>
     </profiles>

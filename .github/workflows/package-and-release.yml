@@ -27,13 +27,15 @@ jobs:
 
       # Step 3: Auto-increment project version
       - name: Auto-increment project version
+        shell: pwsh
         run: |
-          CURRENT_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-          echo "Current version: $CURRENT_VERSION"
-          # Increment the patch version
-          NEXT_VERSION=$(echo $CURRENT_VERSION | awk -F. '{$NF+=1; print $1"."$2"."$NF}')
-          echo "Next version: $NEXT_VERSION"
-          mvn versions:set -DnewVersion=$NEXT_VERSION
+          $currentVersion = (mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          Write-Host "Current version: $currentVersion"
+          $versionParts = $currentVersion -split '\.'
+          $versionParts[2] = [int]$versionParts[2] + 1
+          $nextVersion = "$($versionParts[0]).$($versionParts[1]).$($versionParts[2])"
+          Write-Host "Next version: $nextVersion"
+          mvn versions:set -DnewVersion=$nextVersion
           mvn versions:commit
 
       # Step 4: Build the application
@@ -43,24 +45,26 @@ jobs:
       # Step 5: Build and package runnable executables with jpackage
       - name: Package with jpackage
         run: |
-          mkdir -p build/runnables
+          mkdir -p build/runnables/windows
+          mkdir -p build/runnables/macos
+          mkdir -p build/runnables/linux
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            jpackage --type app-image --input target/ --dest build/runnables \
+            jpackage --type app-image --input target/ --dest build/runnables/windows \
               --name RomScraper --main-jar target/$(ls target | grep '.jar$') \
               --main-class com.rom.scraper.Launcher
           elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
-            jpackage --type app-image --input target/ --dest build/runnables \
+            jpackage --type app-image --input target/ --dest build/runnables/macos \
               --name RomScraper --main-jar target/$(ls target | grep '.jar$') \
               --main-class com.rom.scraper.Launcher
           elif [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
-            jpackage --type app-image --input target/ --dest build/runnables \
+            jpackage --type app-image --input target/ --dest build/runnables/linux \
               --name RomScraper --main-jar target/$(ls target | grep '.jar$') \
               --main-class com.rom.scraper.Launcher
           fi
 
       # Step 6: Upload runnable artifacts
       - name: Upload runnable executables
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: runnables-${{ matrix.os }}
           path: build/runnables/
@@ -95,7 +99,9 @@ jobs:
             ${{ env.description }}
           tag_name: ${{ github.ref_name }}
           files: |
-            build/runnables/*
+            build/runnables/windows/*
+            build/runnables/macos/*
+            build/runnables/linux/*
             target/$(ls target | grep '.jar$')
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
