@@ -2,11 +2,8 @@ package com.rom.scraper.viewmodel;
 
 import com.rom.scraper.model.DownloadTask;
 import com.rom.scraper.service.DownloadService;
-import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.ObjectProperty;
-import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleObjectProperty;
-import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
 
 /**
@@ -17,32 +14,9 @@ public class DownloadViewModel {
 
     // Properties
     private final ObjectProperty<DownloadTask> selectedTaskProperty = new SimpleObjectProperty<>();
-    private final BooleanProperty canClearProperty = new SimpleBooleanProperty(false);
 
     public DownloadViewModel(DownloadService downloadService) {
         this.downloadService = downloadService;
-
-        // Monitor the download tasks for changes to update the canClear property
-        downloadService.getDownloadTasks().addListener((ListChangeListener<DownloadTask>) c -> {
-            updateCanClearProperty();
-        });
-
-        // Also monitor for status changes in the tasks
-        downloadService.getDownloadTasks().addListener((ListChangeListener<DownloadTask>) c -> {
-            while (c.next()) {
-                if (c.wasAdded()) {
-                    for (DownloadTask task : c.getAddedSubList()) {
-                        task.statusProperty().addListener((obs, oldStatus, newStatus) -> {
-                            updateCanClearProperty();
-                        });
-                    }
-                }
-            }
-        });
-    }
-
-    private void updateCanClearProperty() {
-        canClearProperty.set(downloadService.canClearTasks());
     }
 
     public ObservableList<DownloadTask> getDownloadTasks() {
@@ -55,16 +29,43 @@ public class DownloadViewModel {
         }
     }
 
+    /**
+     * Cancels all active and queued downloads.
+     */
+    public void cancelAllDownloads() {
+        downloadService.cancelAllTasks();
+    }
+
     public void clearCompletedDownloads() {
         downloadService.clearCompletedTasks();
+    }
+
+    /**
+     * Checks if there are any completed, cancelled, or error tasks that can be cleared.
+     * This method is used to determine whether the "Clear Completed" button should be enabled.
+     */
+    public boolean canClearTasks() {
+        return downloadService.canClearTasks();
+    }
+
+    /**
+     * Checks if there are any active or queued downloads.
+     * This method is used to determine whether the "Cancel All" button should be enabled.
+     */
+    public boolean hasActiveDownloads() {
+        for (DownloadTask task : getDownloadTasks()) {
+            String status = task.getStatus();
+            if (status != null && (status.equals("Queued") ||
+                    status.equals("Downloading") ||
+                    status.startsWith("Downloading:"))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // Getter for properties
     public ObjectProperty<DownloadTask> selectedTaskProperty() {
         return selectedTaskProperty;
-    }
-
-    public BooleanProperty canClearProperty() {
-        return canClearProperty;
     }
 }

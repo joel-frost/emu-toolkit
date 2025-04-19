@@ -7,7 +7,6 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.ProgressBarTableCell;
-import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
@@ -69,9 +68,8 @@ public class DownloadView {
         statusCol.prefWidthProperty().bind(downloadsTable.widthProperty().multiply(0.2));
 
         // Create a cancel column with a button
-        TableColumn<DownloadTask, DownloadTask> actionCol = new TableColumn<>("");
-        actionCol.setCellValueFactory(cellData -> new javafx.beans.property.SimpleObjectProperty<>(cellData.getValue()));
-        actionCol.setCellFactory(param -> new CancelButtonCell(viewModel));
+        TableColumn<DownloadTask, Void> actionCol = new TableColumn<>("");
+        actionCol.setCellFactory(column -> new CancelButtonCell(viewModel));
         actionCol.prefWidthProperty().bind(downloadsTable.widthProperty().multiply(0.1));
 
         // Add columns to table
@@ -85,13 +83,31 @@ public class DownloadView {
 
     private HBox createButtonBox() {
         HBox buttonBox = new HBox(10);
+        buttonBox.setAlignment(Pos.CENTER_LEFT);
 
-        // Clear button - enabled only when all downloads are complete/cancelled
+        // Clear button - enabled only when there are completed/cancelled/error downloads to clear
         Button clearButton = new Button("Clear Completed");
         clearButton.setOnAction(e -> viewModel.clearCompletedDownloads());
-        clearButton.disableProperty().bind(viewModel.canClearProperty().not());
 
-        buttonBox.getChildren().add(clearButton);
+        // Changed to use canClearTasks directly instead of binding to property
+        // This allows clearing completed tasks even when other downloads are in progress
+        clearButton.disableProperty().bind(Bindings.createBooleanBinding(
+                () -> !viewModel.canClearTasks(),
+                viewModel.getDownloadTasks()
+        ));
+
+        // Cancel All button - cancels all active and queued downloads
+        Button cancelAllButton = new Button("Cancel All");
+        cancelAllButton.setOnAction(e -> viewModel.cancelAllDownloads());
+
+        // Disable the Cancel All button when there are no active or queued downloads
+        cancelAllButton.disableProperty().bind(Bindings.createBooleanBinding(
+                () -> !viewModel.hasActiveDownloads(),
+                viewModel.getDownloadTasks()
+        ));
+
+        // Add buttons to buttonBox
+        buttonBox.getChildren().addAll(clearButton, cancelAllButton);
 
         return buttonBox;
     }
@@ -99,7 +115,7 @@ public class DownloadView {
     /**
      * Custom table cell with a cancel button.
      */
-    private static class CancelButtonCell extends TableCell<DownloadTask, DownloadTask> {
+    private static class CancelButtonCell extends TableCell<DownloadTask, Void> {
         private final Button cancelButton;
         private final DownloadViewModel viewModel;
 
@@ -110,7 +126,7 @@ public class DownloadView {
             cancelButton = new Button("✕");
             cancelButton.setStyle("-fx-font-size: 10px; -fx-padding: 2px 5px;");
             cancelButton.setOnAction(event -> {
-                DownloadTask task = getItem();
+                DownloadTask task = getTableRow().getItem();
                 if (task != null) {
                     viewModel.cancelDownload(task);
                 }
@@ -118,19 +134,30 @@ public class DownloadView {
         }
 
         @Override
-        protected void updateItem(DownloadTask task, boolean empty) {
-            super.updateItem(task, empty);
+        protected void updateItem(Void item, boolean empty) {
+            super.updateItem(item, empty);
 
-            if (empty || task == null) {
+            if (empty) {
                 setGraphic(null);
+                return;
+            }
+
+            // Get the task from the row
+            DownloadTask task = getTableRow().getItem();
+            if (task == null) {
+                setGraphic(null);
+                return;
+            }
+
+            // Only show button if task is still downloading or queued
+            String status = task.getStatus();
+            if (status != null &&
+                    (status.equals("Downloading") ||
+                            status.startsWith("Downloading:") ||
+                            status.equals("Queued"))) {
+                setGraphic(cancelButton);
             } else {
-                // Only show button if task is still downloading
-                String status = task.getStatus();
-                if ("Downloading".equals(status) || "Queued".equals(status)) {
-                    setGraphic(cancelButton);
-                } else {
-                    setGraphic(null);
-                }
+                setGraphic(null);
             }
         }
     }
