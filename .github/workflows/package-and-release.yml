@@ -40,12 +40,41 @@ jobs:
           # Remove SNAPSHOT if present
           VERSION_BASE=${CURRENT_VERSION/-SNAPSHOT/}
           
-          # Split version
-          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION_BASE"
+          # Extract version components, handling various formats (x.y, x.y.z)
+          IFS='.' read -r -a VERSION_PARTS <<< "$VERSION_BASE"
           
-          # Increment patch version
-          NEW_PATCH=$((PATCH + 1))
-          NEW_VERSION="$MAJOR.$MINOR.$NEW_PATCH"
+          # Determine number of parts
+          NUM_PARTS=${#VERSION_PARTS[@]}
+          
+          # Handle different version formats
+          if [ "$NUM_PARTS" -eq 2 ]; then
+            # Format is x.y (e.g., 1.0, 2.0, 1.2)
+            MAJOR="${VERSION_PARTS[0]}"
+            MINOR="${VERSION_PARTS[1]}"
+          
+            # If we're at x.0, start with x.0.1
+            if [ "$MINOR" -eq 0 ]; then
+              NEW_VERSION="$MAJOR.$MINOR.1"
+            else
+              # For other cases like 1.2, increment to 1.2.1
+              NEW_VERSION="$MAJOR.$MINOR.1"
+            fi
+          elif [ "$NUM_PARTS" -eq 3 ]; then
+            # Format is x.y.z (e.g., 1.0.1, 2.0.5)
+            MAJOR="${VERSION_PARTS[0]}"
+            MINOR="${VERSION_PARTS[1]}"
+            PATCH="${VERSION_PARTS[2]}"
+          
+            # Increment patch version
+            NEW_PATCH=$((PATCH + 1))
+            NEW_VERSION="$MAJOR.$MINOR.$NEW_PATCH"
+          else
+            # Handle unexpected formats
+            echo "Unexpected version format: $VERSION_BASE"
+            exit 1
+          fi
+          
+          echo "Incrementing version from $VERSION_BASE to $NEW_VERSION"
           
           # Update POM file
           sed -i "s/<version>$CURRENT_VERSION<\/version>/<version>$NEW_VERSION<\/version>/" pom.xml
@@ -128,16 +157,24 @@ jobs:
       - name: Build Windows executable
         run: |
           mvn clean package -DskipTests
-          mkdir -p target/jpackage-input/lib
-          cp target/*.jar target/jpackage-input/
-          cp target/lib/* target/jpackage-input/lib/
           
-          # Use jpackage directly instead of Maven plugin
+          # Use PowerShell commands for Windows
+          if (!(Test-Path -Path "target\jpackage-input\lib")) {
+            New-Item -Path "target\jpackage-input\lib" -ItemType Directory -Force
+          }
+          
+          Copy-Item -Path "target\*.jar" -Destination "target\jpackage-input" -Force
+          Copy-Item -Path "target\lib\*" -Destination "target\jpackage-input\lib" -Force
+          
+          # Get the main JAR file
+          $mainJar = Get-ChildItem -Path "target" -Filter "*.jar" | Where-Object { !$_.Name.Contains("sources") -and !$_.Name.Contains("javadoc") } | Select-Object -ExpandProperty Name -Last 1
+          
+          # Use jpackage directly
           jpackage --name RomScraper `
             --app-version ${{ needs.update-version.outputs.version }} `
-            --input target/jpackage-input `
-            --dest target/dist `
-            --main-jar $(dir target/*.jar | select -Last 1 | Split-Path -Leaf) `
+            --input target\jpackage-input `
+            --dest target\dist `
+            --main-jar $mainJar `
             --main-class com.rom.scraper.Launcher `
             --type app-image
 
@@ -170,7 +207,7 @@ jobs:
           cp target/*.jar target/jpackage-input/
           cp target/lib/* target/jpackage-input/lib/
           
-          # Use jpackage directly instead of Maven plugin
+          # Use jpackage directly
           MAIN_JAR=$(find target -maxdepth 1 -name "*.jar" | head -1 | xargs basename)
           jpackage --name RomScraper \
             --app-version ${{ needs.update-version.outputs.version }} \
@@ -209,7 +246,7 @@ jobs:
           cp target/*.jar target/jpackage-input/
           cp target/lib/* target/jpackage-input/lib/
           
-          # Use jpackage directly instead of Maven plugin
+          # Use jpackage directly
           MAIN_JAR=$(find target -maxdepth 1 -name "*.jar" | head -1 | xargs basename)
           jpackage --name RomScraper \
             --app-version ${{ needs.update-version.outputs.version }} \
