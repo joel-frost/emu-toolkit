@@ -19,6 +19,7 @@ import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.control.cell.ProgressBarTableCell;
 import javafx.scene.layout.*;
+import javafx.stage.DirectoryChooser;
 import javafx.stage.Stage;
 
 import java.io.File;
@@ -78,12 +79,25 @@ public class MainViewController {
         mainTabPane.getTabs().addAll(searchTab, batchTab, downloadsTab);
         mainTabPane.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
 
+        HBox statusBar = new HBox(10);
+        statusBar.setPadding(new Insets(5));
+        statusBar.setAlignment(Pos.CENTER_LEFT);
+
+        loadingIndicator = new ProgressIndicator();
+        loadingIndicator.setPrefSize(20, 20);
+        loadingIndicator.setVisible(false);
+
+        statusLabel = new Label("Ready");
+
+        statusBar.getChildren().addAll(loadingIndicator, statusLabel);
+
         // Assemble layout
         root.setTop(configPanel);
         root.setCenter(mainTabPane);
+        root.setBottom(statusBar);
 
         // Set the scene
-        Scene scene = new Scene(root, 700, 700);
+        Scene scene = new Scene(root, 800, 750);
         primaryStage.setScene(scene);
         primaryStage.show();
     }
@@ -341,23 +355,25 @@ public class MainViewController {
     }
 
     private void browseFolder() {
-        String folderName = downloadFolderField.getText().trim();
-        if (folderName.isEmpty()) {
-            folderName = "roms";
-        }
+        DirectoryChooser directoryChooser = new javafx.stage.DirectoryChooser();
+        directoryChooser.setTitle("Select Download Folder");
 
-        File folder = new File(folderName);
-        if (!folder.exists()) {
-            boolean created = folder.mkdirs();
-            if (created) {
-                updateStatus("Created directory: " + folder.getAbsolutePath());
-            } else {
-                showError("Error", "Could not create directory: " + folder.getAbsolutePath());
-                return;
+        // Set initial directory based on current value if valid
+        String currentPath = downloadFolderField.getText().trim();
+        if (!currentPath.isEmpty()) {
+            File initialDir = new File(currentPath);
+            if (initialDir.exists() && initialDir.isDirectory()) {
+                directoryChooser.setInitialDirectory(initialDir);
             }
         }
 
-        downloadFolderField.setText(folder.getAbsolutePath());
+        // Show dialog and get result
+        File selectedFolder = directoryChooser.showDialog(primaryStage);
+
+        if (selectedFolder != null) {
+            downloadFolderField.setText(selectedFolder.getAbsolutePath());
+            updateStatus("Download folder set to: " + selectedFolder.getAbsolutePath());
+        }
     }
 
     private void processBatchGames(List<String> games, ListView<String> resultsView) {
