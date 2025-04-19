@@ -127,7 +127,7 @@ public class MainViewController {
         browseButton.setOnAction(e -> browseFolder());
         folderBox.getChildren().addAll(folderLabel, downloadFolderField, browseButton);
 
-        // Thread count, region, and file extension
+        // Thread count and file extension
         HBox optionsBox = new HBox(20);
         optionsBox.setAlignment(Pos.CENTER_LEFT); // Align elements in the options box
 
@@ -136,14 +136,6 @@ public class MainViewController {
         threadCountSpinner = new Spinner<>(1, 20, 5);
         threadCountSpinner.setEditable(true);
         threadCountSpinner.setPrefWidth(80);
-
-        // Region selector
-        Label regionLabel = new Label("Region:");
-        regionSelector = new ComboBox<>();
-        regionSelector.setItems(FXCollections.observableArrayList(
-                "Any", "USA", "EUR", "JPN"
-        ));
-        regionSelector.getSelectionModel().select(0);
 
         // File extension selector
         Label extLabel = new Label("File Extension:");
@@ -157,7 +149,6 @@ public class MainViewController {
         // Add components to options box
         optionsBox.getChildren().addAll(
                 threadLabel, threadCountSpinner,
-                regionLabel, regionSelector,
                 extLabel, fileExtensionSelector
         );
 
@@ -172,6 +163,19 @@ public class MainViewController {
         VBox tabContent = new VBox(10);
         tabContent.setPadding(new Insets(10));
 
+        // Create search row with region selector first
+        HBox searchBox = new HBox(10);
+        searchBox.setAlignment(Pos.CENTER_LEFT);
+
+        // Region selector (now positioned first)
+        Label regionLabel = new Label("Region:");
+        regionSelector = new ComboBox<>();
+        regionSelector.setItems(FXCollections.observableArrayList(
+                "Any", "USA", "EUR", "JPN"
+        ));
+        regionSelector.getSelectionModel().select(0);
+        regionSelector.setPrefWidth(100);
+
         // Search field
         TextField searchField = new TextField();
         searchField.setPrefWidth(400);
@@ -180,8 +184,8 @@ public class MainViewController {
         Button searchButton = new Button("Search");
         searchButton.setDefaultButton(true);
 
-        HBox searchBox = new HBox(10);
-        searchBox.getChildren().addAll(searchField, searchButton);
+        // Add all components to search box in the desired order
+        searchBox.getChildren().addAll(regionLabel, regionSelector, searchField, searchButton);
 
         // Results view
         TableView<RomFile> resultsTable = new TableView<>();
@@ -220,6 +224,18 @@ public class MainViewController {
             }
         });
 
+        // Download action
+        downloadButton.setOnAction(e -> {
+            RomFile selectedRom = resultsTable.getSelectionModel().getSelectedItem();
+            if (selectedRom != null) {
+                String folder = downloadFolderField.getText().trim();
+                if (validateFolder(folder)) {
+                    downloadManager.addToQueue(selectedRom, folder);
+                    updateStatus("Added to download queue: " + selectedRom.getName());
+                }
+            }
+        });
+
         // Add components to the VBox
         tabContent.getChildren().addAll(searchBox, resultsTable, downloadButton);
 
@@ -238,13 +254,16 @@ public class MainViewController {
         Label instructionLabel = new Label("Enter game titles as a comma-separated list:");
         TextArea batchInput = new TextArea();
         batchInput.setPromptText("Example: Mario Kart, Super Metroid, Final Fantasy");
-        batchInput.setPrefRowCount(5);
+        batchInput.setPrefRowCount(1);
 
         Button processBatchButton = new Button("Process Batch");
 
         // Results area
         ListView<String> batchResultsView = new ListView<>();
-        batchResultsView.setPrefHeight(300);
+
+        // Make the ListView fill the available space
+        VBox.setVgrow(batchResultsView, Priority.ALWAYS);
+        batchResultsView.setPrefHeight(300); // Initial height, will expand as needed
 
         // Process batch action
         processBatchButton.setOnAction(e -> {
@@ -263,12 +282,21 @@ public class MainViewController {
             }
         });
 
+        // Create a label and HBox for the results header
+        Label resultsLabel = new Label("Results:");
+
+        // Add components to the VBox with proper spacing
         tabContent.getChildren().addAll(
                 instructionLabel, batchInput, processBatchButton,
-                new Label("Results:"), batchResultsView
+                resultsLabel, batchResultsView
         );
 
-        return new ScrollPane(tabContent);
+        // Create a ScrollPane and set it to fit the width
+        ScrollPane scrollPane = new ScrollPane(tabContent);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setFitToHeight(true); // Make it fit the height as well
+
+        return scrollPane;
     }
 
     private ScrollPane createDownloadsTab() {
