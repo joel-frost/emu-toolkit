@@ -11,14 +11,15 @@ jobs:
     outputs:
       version: ${{ steps.set-version.outputs.version }}
       release_title: ${{ steps.set-version.outputs.release_title }}
+      changelog: ${{ steps.set-version.outputs.changelog }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
@@ -61,6 +62,14 @@ jobs:
           echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
           echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "release_title=v$NEW_VERSION" >> $GITHUB_OUTPUT
+          
+          # Create a properly escaped changelog for output
+          CHANGELOG_ESCAPED="${CHANGELOG//'%'/'%25'}"
+          CHANGELOG_ESCAPED="${CHANGELOG_ESCAPED//$'\n'/'%0A'}"
+          CHANGELOG_ESCAPED="${CHANGELOG_ESCAPED//$'\r'/'%0D'}"
+          echo "changelog=$CHANGELOG_ESCAPED" >> $GITHUB_OUTPUT
+          
+          # Also set as env variable for the current job
           echo "changelog<<EOF" >> $GITHUB_ENV
           echo "$CHANGELOG" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
@@ -80,12 +89,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: refs/tags/v${{ needs.update-version.outputs.version }}
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
@@ -105,12 +114,12 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: refs/tags/v${{ needs.update-version.outputs.version }}
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
@@ -119,7 +128,17 @@ jobs:
       - name: Build Windows executable
         run: |
           mvn clean package -DskipTests
-          mvn org.panteleyev:jpackage-maven-plugin:jpackage -Djpackage.type=app-image
+          mkdir -p target/jpackage-input/lib
+          cp target/*.jar target/jpackage-input/
+          cp target/lib/* target/jpackage-input/lib/
+          mvn org.panteleyev:jpackage-maven-plugin:jpackage `
+            -DappVersion=${{ needs.update-version.outputs.version }} `
+            -Dn=RomScraper `
+            -DmainClass=com.rom.scraper.Launcher `
+            -DinputDir=target/jpackage-input `
+            -Dvendor=com.rom `
+            -Ddestination=target/dist `
+            -Dtype=app-image
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
@@ -132,12 +151,12 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: refs/tags/v${{ needs.update-version.outputs.version }}
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
@@ -146,7 +165,17 @@ jobs:
       - name: Build macOS app
         run: |
           mvn clean package -DskipTests
-          mvn org.panteleyev:jpackage-maven-plugin:jpackage -Djpackage.type=app-image
+          mkdir -p target/jpackage-input/lib
+          cp target/*.jar target/jpackage-input/
+          cp target/lib/* target/jpackage-input/lib/
+          mvn org.panteleyev:jpackage-maven-plugin:jpackage \
+            -DappVersion=${{ needs.update-version.outputs.version }} \
+            -Dn=RomScraper \
+            -DmainClass=com.rom.scraper.Launcher \
+            -DinputDir=target/jpackage-input \
+            -Dvendor=com.rom \
+            -Ddestination=target/dist \
+            -Dtype=app-image
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
@@ -159,12 +188,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: refs/tags/v${{ needs.update-version.outputs.version }}
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
@@ -173,7 +202,17 @@ jobs:
       - name: Build Linux package
         run: |
           mvn clean package -DskipTests
-          mvn org.panteleyev:jpackage-maven-plugin:jpackage -Djpackage.type=app-image
+          mkdir -p target/jpackage-input/lib
+          cp target/*.jar target/jpackage-input/
+          cp target/lib/* target/jpackage-input/lib/
+          mvn org.panteleyev:jpackage-maven-plugin:jpackage \
+            -DappVersion=${{ needs.update-version.outputs.version }} \
+            -Dn=RomScraper \
+            -DmainClass=com.rom.scraper.Launcher \
+            -DinputDir=target/jpackage-input \
+            -Dvendor=com.rom \
+            -Ddestination=target/dist \
+            -Dtype=app-image
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
@@ -186,7 +225,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: artifacts
 
@@ -224,7 +263,7 @@ jobs:
         with:
           tag_name: v${{ needs.update-version.outputs.version }}
           name: ${{ needs.update-version.outputs.release_title }}
-          body: ${{ env.CHANGELOG }}
+          body: ${{ needs.update-version.outputs.changelog }}
           files: release-files/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
