@@ -24,14 +24,16 @@ public class DownloadService {
     private final ObservableList<DownloadTask> downloadTasks;
     private final int BUFFER_SIZE = 8192;
     private final Map<DownloadTask, Future<?>> taskFutures;
-    private volatile int maxParallelDownloads = 5;
     private final int PROGRESS_UPDATE_INTERVAL_MS = 100;
+
+    // Fixed to 5 parallel downloads
+    private final int maxParallelDownloads = 5;
 
     // Use a single-threaded executor to handle download queue management
     private final ExecutorService queueManagerExecutor = Executors.newSingleThreadExecutor();
 
     // Use a fixed executor for the actual downloads
-    private ExecutorService downloadExecutor;
+    private final ExecutorService downloadExecutor;
 
     // Queue for pending downloads
     private final Queue<DownloadTask> pendingDownloads = new ConcurrentLinkedQueue<>();
@@ -46,7 +48,7 @@ public class DownloadService {
         this.downloadTasks = FXCollections.observableArrayList();
         this.taskFutures = new ConcurrentHashMap<>();
 
-        // Initialize with a fixed thread pool
+        // Initialize with a fixed thread pool of 5 parallel downloads
         this.downloadExecutor = Executors.newFixedThreadPool(maxParallelDownloads);
     }
 
@@ -328,35 +330,6 @@ public class DownloadService {
             }
         }
         return false;
-    }
-
-    public void setParallelDownloads(int count) {
-        if (count <= 0 || count > 20) {
-            return; // Ignore invalid values
-        }
-
-        if (this.maxParallelDownloads != count) {
-            try {
-                queueLock.lock();
-
-                // Update the limit
-                this.maxParallelDownloads = count;
-
-                // Shutdown previous executor and create a new one with the updated count
-                if (downloadExecutor != null) {
-                    ExecutorService oldExecutor = downloadExecutor;
-                    downloadExecutor = Executors.newFixedThreadPool(count);
-
-                    // Shut down the old executor but allow running tasks to complete
-                    oldExecutor.shutdown();
-                }
-
-                // Process queue to potentially start more downloads
-                processDownloadQueue();
-            } finally {
-                queueLock.unlock();
-            }
-        }
     }
 
     public void shutdown() {
