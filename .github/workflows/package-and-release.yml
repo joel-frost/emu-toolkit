@@ -29,7 +29,7 @@ jobs:
       - name: Auto-increment project version
         shell: pwsh
         run: |
-          $currentVersion = (mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          $currentVersion = & mvn help:evaluate -Dexpression=project.version -q -DforceStdout | Select-String "\d+\.\d+\.\d+"
           Write-Host "Current version: $currentVersion"
           $versionParts = $currentVersion -split '\.'
           $versionParts[2] = [int]$versionParts[2] + 1
