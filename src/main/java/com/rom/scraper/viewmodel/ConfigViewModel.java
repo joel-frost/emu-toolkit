@@ -1,5 +1,6 @@
 package com.rom.scraper.viewmodel;
 
+import com.rom.scraper.service.DownloadService;
 import com.rom.scraper.service.RomScraperService;
 import javafx.application.Platform;
 import javafx.beans.property.*;
@@ -17,6 +18,7 @@ import java.util.function.Consumer;
  */
 public class ConfigViewModel {
     private final RomScraperService romScraperService;
+    private final DownloadService downloadService;
 
     // Properties
     private final StringProperty urlProperty = new SimpleStringProperty("");
@@ -34,8 +36,9 @@ public class ConfigViewModel {
     private final ListProperty<String> availableRegionsProperty = new SimpleListProperty<>(
             FXCollections.observableArrayList(Arrays.asList("Any", "USA", "EUR", "JPN")));
 
-    public ConfigViewModel(RomScraperService romScraperService) {
+    public ConfigViewModel(RomScraperService romScraperService, DownloadService downloadService) {
         this.romScraperService = romScraperService;
+        this.downloadService = downloadService;
 
         // Initialize available extensions with default values
         List<String> initialExtensions = new ArrayList<>();
@@ -50,6 +53,18 @@ public class ConfigViewModel {
                 Platform.runLater(() -> this.loadingProperty.set(newVal)));
         romScraperService.statusMessageProperty().addListener((obs, oldVal, newVal) ->
                 Platform.runLater(() -> this.statusMessageProperty.set(newVal)));
+
+        // Add listener to parallel downloads property to update the download service
+        parallelDownloadsProperty.addListener((obs, oldValue, newValue) -> {
+            if (downloadService != null) {
+                downloadService.setParallelDownloads(newValue.intValue());
+            }
+        });
+
+        // Initialize the download service with the current setting
+        if (downloadService != null) {
+            downloadService.setParallelDownloads(parallelDownloadsProperty.get());
+        }
     }
 
     public void connectToUrl(Consumer<Boolean> callback) {
@@ -90,6 +105,7 @@ public class ConfigViewModel {
                     });
                 }
             });
+            detectionThread.setDaemon(true); // Mark as daemon thread to not block application shutdown
             detectionThread.start();
         } else {
             // Connect with the selected/custom extension

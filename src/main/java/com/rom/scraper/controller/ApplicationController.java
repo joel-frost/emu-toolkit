@@ -37,7 +37,7 @@ public class ApplicationController {
         this.downloadService = new DownloadService();
 
         // Create view models
-        this.configViewModel = new ConfigViewModel(romScraperService);
+        this.configViewModel = new ConfigViewModel(romScraperService, downloadService);
         this.searchViewModel = new SearchViewModel(romScraperService, downloadService, configViewModel);
         this.batchViewModel = new BatchViewModel(romScraperService, downloadService, configViewModel);
         this.downloadViewModel = new DownloadViewModel(downloadService);

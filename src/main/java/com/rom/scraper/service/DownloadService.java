@@ -10,30 +10,44 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.RandomAccessFile;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
- * Service responsible for managing downloads.
+ * Service responsible for managing downloads with strict enforcement of parallel download limits.
  */
 public class DownloadService {
 
     private final ObservableList<DownloadTask> downloadTasks;
-    private final ExecutorService downloadExecutor;
     private final int BUFFER_SIZE = 8192;
     private final Map<DownloadTask, Future<?>> taskFutures;
+    private volatile int maxParallelDownloads = 5;
+    private final int PROGRESS_UPDATE_INTERVAL_MS = 100;
+
+    // Use a single-threaded executor to handle download queue management
+    private final ExecutorService queueManagerExecutor = Executors.newSingleThreadExecutor();
+
+    // Use a fixed executor for the actual downloads
+    private ExecutorService downloadExecutor;
+
+    // Queue for pending downloads
+    private final Queue<DownloadTask> pendingDownloads = new ConcurrentLinkedQueue<>();
+
+    // Set to track currently active downloads
+    private final Set<DownloadTask> activeDownloads = Collections.synchronizedSet(new HashSet<>());
+
+    // Lock to protect queue processing
+    private final ReentrantLock queueLock = new ReentrantLock();
 
     public DownloadService() {
         this.downloadTasks = FXCollections.observableArrayList();
-        this.downloadExecutor = Executors.newFixedThreadPool(5);
-        this.taskFutures = new HashMap<>();
+        this.taskFutures = new ConcurrentHashMap<>();
+
+        // Initialize with a fixed thread pool
+        this.downloadExecutor = Executors.newFixedThreadPool(maxParallelDownloads);
     }
 
     public ObservableList<DownloadTask> getDownloadTasks() {
@@ -63,13 +77,58 @@ public class DownloadService {
         }
 
         // Create new download task
-        DownloadTask task = new DownloadTask(romFile.getName(), romFile.getUrl(), destFile.getPath());
+        final DownloadTask task = new DownloadTask(romFile.getName(), romFile.getUrl(), destFile.getPath());
 
-        Platform.runLater(() -> downloadTasks.add(task));
+        Platform.runLater(() -> {
+            downloadTasks.add(task);
+            task.setStatus("Queued");
+        });
 
-        // Start download
-        Future<?> future = downloadExecutor.submit(() -> downloadFile(task));
-        taskFutures.put(task, future);
+        // Add task to pending queue and process queue
+        pendingDownloads.add(task);
+        processDownloadQueue();
+    }
+
+    /**
+     * Process the download queue in a single-threaded manner to ensure consistent state
+     */
+    private void processDownloadQueue() {
+        // Use the queue manager executor to handle queue processing
+        queueManagerExecutor.submit(() -> {
+            try {
+                queueLock.lock();
+
+                // While we have capacity and pending downloads
+                while (activeDownloads.size() < maxParallelDownloads && !pendingDownloads.isEmpty()) {
+                    // Get next task from queue
+                    DownloadTask nextTask = pendingDownloads.poll();
+                    if (nextTask != null) {
+                        // Mark as active before starting
+                        activeDownloads.add(nextTask);
+
+                        // Submit the download
+                        Future<?> future = downloadExecutor.submit(() -> {
+                            try {
+                                // Update task status
+                                Platform.runLater(() -> nextTask.setStatus("Downloading"));
+
+                                // Perform download
+                                downloadFile(nextTask);
+                            } finally {
+                                // Mark as inactive and process queue again
+                                activeDownloads.remove(nextTask);
+                                processDownloadQueue();
+                            }
+                        });
+
+                        // Store future for cancellation
+                        taskFutures.put(nextTask, future);
+                    }
+                }
+            } finally {
+                queueLock.unlock();
+            }
+        });
     }
 
     private void downloadFile(DownloadTask task) {
@@ -90,6 +149,8 @@ public class DownloadService {
             URL url = new URL(task.getUrl());
             connection = (HttpURLConnection) url.openConnection();
             connection.setRequestMethod("GET");
+            connection.setConnectTimeout(15000); // 15 seconds connect timeout
+            connection.setReadTimeout(30000);    // 30 seconds read timeout
             connection.connect();
 
             int responseCode = connection.getResponseCode();
@@ -99,14 +160,15 @@ public class DownloadService {
                     try {
                         task.setStatus("Error: HTTP " + finalConnection.getResponseCode());
                     } catch (IOException e) {
-                        throw new RuntimeException(e);
+                        task.setStatus("Error: " + e.getMessage());
                     }
                 });
                 return;
             }
 
             // Get file size
-            int contentLength = connection.getContentLength();
+            long contentLength = connection.getContentLengthLong();
+            boolean knownFileSize = contentLength > 0;
 
             // Set up streams
             try (InputStream inputStream = connection.getInputStream();
@@ -115,9 +177,14 @@ public class DownloadService {
                 byte[] buffer = new byte[BUFFER_SIZE];
                 int bytesRead;
                 long totalBytesRead = 0;
-                Platform.runLater(() -> task.setStatus("Downloading"));
 
                 long lastUpdateTime = System.currentTimeMillis();
+                long startTime = System.currentTimeMillis();
+
+                // For download speed calculation
+                long lastSpeedUpdateTime = startTime;
+                long bytesAtLastSpeedUpdate = 0;
+                String currentSpeed = "Calculating...";
 
                 while ((bytesRead = inputStream.read(buffer)) != -1) {
                     // Check if we should cancel
@@ -129,22 +196,59 @@ public class DownloadService {
                     outputStream.write(buffer, 0, bytesRead);
                     totalBytesRead += bytesRead;
 
-                    // Update progress - throttled to update at most 5 times per second
-                    if (contentLength > 0) {
-                        final double progress = (double) totalBytesRead / contentLength;
-                        long currentTime = System.currentTimeMillis();
+                    // Current time for update calculations
+                    long currentTime = System.currentTimeMillis();
 
-                        if (currentTime - lastUpdateTime > 200 || progress >= 1.0) {
-                            lastUpdateTime = currentTime;
-                            Platform.runLater(() -> task.setProgress(progress));
+                    // Update download speed every 1 second
+                    if (currentTime - lastSpeedUpdateTime > 1000) {
+                        long bytesInInterval = totalBytesRead - bytesAtLastSpeedUpdate;
+                        long timeInterval = currentTime - lastSpeedUpdateTime;
+
+                        // Calculate speed
+                        if (timeInterval > 0) {
+                            double speedBps = (bytesInInterval * 1000.0) / timeInterval;
+                            currentSpeed = formatFileSize(speedBps) + "/s";
                         }
+
+                        lastSpeedUpdateTime = currentTime;
+                        bytesAtLastSpeedUpdate = totalBytesRead;
+                    }
+
+                    // Update progress based on known file size
+                    if (knownFileSize && (currentTime - lastUpdateTime > PROGRESS_UPDATE_INTERVAL_MS)) {
+                        lastUpdateTime = currentTime;
+
+                        // Calculate accurate progress
+                        final double progress = Math.min(0.99, (double) totalBytesRead / contentLength);
+                        final String speedString = currentSpeed;
+
+                        Platform.runLater(() -> {
+                            task.setProgress(progress);
+                            task.setStatus("Downloading: " + speedString);
+                        });
+                    }
+                    // For unknown file sizes, update status with speed only
+                    else if (!knownFileSize && (currentTime - lastUpdateTime > PROGRESS_UPDATE_INTERVAL_MS)) {
+                        lastUpdateTime = currentTime;
+
+                        // Use a constant progress display for unknown size files
+                        final double indeterminateProgress = 0.15;
+                        final String speedString = currentSpeed;
+                        final String downloadedSize = formatFileSize(totalBytesRead);
+
+                        Platform.runLater(() -> {
+                            task.setProgress(indeterminateProgress);
+                            task.setStatus("Downloading: " + downloadedSize + " at " + speedString);
+                        });
                     }
                 }
 
                 // Always ensure the final state is correctly set
+                long finalTotalBytesRead = totalBytesRead;
                 Platform.runLater(() -> {
-                    task.setProgress(1.0);
-                    task.setStatus("Complete");
+                    task.setProgress(1.0); // Always set to 100% when download is complete
+                    String finalSize = formatFileSize(finalTotalBytesRead);
+                    task.setStatus("Complete: " + finalSize);
                 });
             }
 
@@ -158,7 +262,18 @@ public class DownloadService {
         }
     }
 
-    // Removed pauseAll(), resumeAll(), pauseTask(), and resumeTask() as requested
+    // Helper method to format file size in human-readable format
+    private String formatFileSize(double bytes) {
+        if (bytes < 1024) {
+            return String.format("%.0f B", bytes);
+        } else if (bytes < 1024 * 1024) {
+            return String.format("%.1f KB", bytes / 1024);
+        } else if (bytes < 1024 * 1024 * 1024) {
+            return String.format("%.2f MB", bytes / (1024 * 1024));
+        } else {
+            return String.format("%.2f GB", bytes / (1024 * 1024 * 1024));
+        }
+    }
 
     public void cancelTask(DownloadTask task) {
         if (downloadTasks.contains(task)) {
@@ -168,9 +283,18 @@ public class DownloadService {
                 future.cancel(true);
             }
 
+            // Remove from active downloads if present
+            activeDownloads.remove(task);
+
+            // Remove from pending queue if present
+            pendingDownloads.remove(task);
+
             Platform.runLater(() -> {
                 task.setStatus("Cancelled");
             });
+
+            // Process queue to start next download
+            processDownloadQueue();
         }
     }
 
@@ -184,6 +308,9 @@ public class DownloadService {
             if ("Complete".equals(status) || "Cancelled".equals(status) ||
                     status.startsWith("Error")) {
                 tasksToRemove.add(task);
+
+                // Also remove any associated futures
+                taskFutures.remove(task);
             }
         }
 
@@ -192,24 +319,50 @@ public class DownloadService {
     }
 
     public boolean canClearTasks() {
-        // Can clear if all tasks are in a final state
+        // Can clear if any tasks are in a final state
         for (DownloadTask task : downloadTasks) {
             String status = task.getStatus();
-            if (!"Complete".equals(status) && !"Cancelled".equals(status) &&
-                    !status.startsWith("Error")) {
-                return false;
+            if ("Complete".equals(status) || "Cancelled".equals(status) ||
+                    status.startsWith("Error")) {
+                return true;
             }
         }
-        return !downloadTasks.isEmpty();
+        return false;
     }
 
     public void setParallelDownloads(int count) {
-        // In a more advanced implementation, we would recreate the ExecutorService
-        // with the new thread count. For simplicity, we'll just note it here.
-        System.out.println("Setting parallel downloads to: " + count);
+        if (count <= 0 || count > 20) {
+            return; // Ignore invalid values
+        }
+
+        if (this.maxParallelDownloads != count) {
+            try {
+                queueLock.lock();
+
+                // Update the limit
+                this.maxParallelDownloads = count;
+
+                // Shutdown previous executor and create a new one with the updated count
+                if (downloadExecutor != null) {
+                    ExecutorService oldExecutor = downloadExecutor;
+                    downloadExecutor = Executors.newFixedThreadPool(count);
+
+                    // Shut down the old executor but allow running tasks to complete
+                    oldExecutor.shutdown();
+                }
+
+                // Process queue to potentially start more downloads
+                processDownloadQueue();
+            } finally {
+                queueLock.unlock();
+            }
+        }
     }
 
     public void shutdown() {
-        downloadExecutor.shutdownNow();
+        if (downloadExecutor != null) {
+            downloadExecutor.shutdownNow();
+        }
+        queueManagerExecutor.shutdownNow();
     }
 }
