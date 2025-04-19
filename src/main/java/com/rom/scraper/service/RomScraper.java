@@ -1,8 +1,7 @@
-package com.rom.scraper;
+package com.rom.scraper.service;
 
-import atlantafx.base.theme.Dracula;
 import atlantafx.base.theme.NordDark;
-import atlantafx.base.theme.PrimerDark;
+import com.rom.scraper.view.MainViewController;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.stage.Stage;

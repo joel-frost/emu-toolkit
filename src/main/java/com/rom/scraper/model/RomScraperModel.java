@@ -1,4 +1,4 @@
-package com.rom.scraper;
+package com.rom.scraper.model;
 
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
