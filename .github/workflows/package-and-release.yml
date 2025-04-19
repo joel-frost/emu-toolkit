@@ -177,12 +177,16 @@ jobs:
             --main-jar $mainJar `
             --main-class com.rom.scraper.Launcher `
             --type app-image
+          
+          echo "Listing jpackage output directory contents:"
+          Get-ChildItem -Path "target\dist" -Recurse | Format-Table -Property FullName
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
           name: windows-artifact
-          path: target/dist/RomScraper
+          path: target/dist
+          if-no-files-found: error
 
   build-macos:
     needs: [update-version, build-jar]
@@ -216,12 +220,16 @@ jobs:
             --main-jar $MAIN_JAR \
             --main-class com.rom.scraper.Launcher \
             --type app-image
+          
+          echo "Listing jpackage output directory contents:"
+          find target/dist -type f -o -type d | sort
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
         with:
           name: macos-artifact
-          path: target/dist/RomScraper.app
+          path: target/dist
+          if-no-files-found: error
 
   build-linux:
     needs: [update-version, build-jar]
@@ -255,12 +263,16 @@ jobs:
             --main-jar $MAIN_JAR \
             --main-class com.rom.scraper.Launcher \
             --type app-image
+          
+          echo "Listing jpackage output directory contents:"
+          find target/dist -type f -o -type d | sort
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
         with:
           name: linux-artifact
-          path: target/dist/RomScraper
+          path: target/dist
+          if-no-files-found: error
 
   create-release:
     needs: [update-version, build-jar, build-windows, build-macos, build-linux]
@@ -271,34 +283,67 @@ jobs:
         with:
           path: artifacts
 
-      - name: Rename artifacts with version
+      - name: Debug - List artifact contents
+        run: |
+          echo "Listing all downloaded artifacts:"
+          find artifacts -type f | sort
+          find artifacts -type d | sort
+
+      - name: Rename and package artifacts with version
         run: |
           VERSION="${{ needs.update-version.outputs.version }}"
           mkdir -p release-files
           
-          # Rename JAR
+          echo "Packaging JAR files..."
           find artifacts/jar-artifact -name "*.jar" -exec cp {} release-files/rom-scraper-${VERSION}.jar \;
           
-          # Package Windows executable
-          if [ -d "artifacts/windows-artifact/RomScraper" ]; then
+          echo "Packaging Windows executable..."
+          if [ -d "artifacts/windows-artifact" ]; then
             cd artifacts/windows-artifact
-            zip -r ../../release-files/RomScraper-${VERSION}-windows.zip RomScraper
+            ls -la
+            if [ -d "RomScraper" ]; then
+              echo "Found Windows RomScraper directory, zipping..."
+              zip -r ../../release-files/RomScraper-${VERSION}-windows.zip RomScraper
+            else
+              echo "Windows RomScraper directory not found"
+              # Try to find it in case the path is different
+              find . -type d -name "RomScraper*" | xargs -I{} zip -r ../../release-files/RomScraper-${VERSION}-windows.zip {}
+            fi
             cd ../..
           fi
           
-          # Package macOS app
-          if [ -d "artifacts/macos-artifact/RomScraper.app" ]; then
+          echo "Packaging macOS app..."
+          if [ -d "artifacts/macos-artifact" ]; then
             cd artifacts/macos-artifact
-            zip -r ../../release-files/RomScraper-${VERSION}-macos.zip RomScraper.app
+            ls -la
+            if [ -d "RomScraper.app" ]; then
+              echo "Found macOS RomScraper.app directory, zipping..."
+              zip -r ../../release-files/RomScraper-${VERSION}-macos.zip RomScraper.app
+            else
+              echo "macOS RomScraper.app directory not found"
+              # Try to find it in case the path is different
+              find . -type d -name "*.app" | xargs -I{} zip -r ../../release-files/RomScraper-${VERSION}-macos.zip {}
+            fi
             cd ../..
           fi
           
-          # Package Linux executable
-          if [ -d "artifacts/linux-artifact/RomScraper" ]; then
+          echo "Packaging Linux executable..."
+          if [ -d "artifacts/linux-artifact" ]; then
             cd artifacts/linux-artifact
-            tar -czf ../../release-files/RomScraper-${VERSION}-linux.tar.gz RomScraper
+            ls -la
+            if [ -d "RomScraper" ]; then
+              echo "Found Linux RomScraper directory, creating tar.gz..."
+              tar -czf ../../release-files/RomScraper-${VERSION}-linux.tar.gz RomScraper
+            else
+              echo "Linux RomScraper directory not found"
+              # Try to find it in case the path is different
+              find . -type d -name "RomScraper*" | xargs -I{} tar -czf ../../release-files/RomScraper-${VERSION}-linux.tar.gz {}
+            fi
             cd ../..
           fi
+          
+          echo "Contents of release-files directory:"
+          ls -la release-files/
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
