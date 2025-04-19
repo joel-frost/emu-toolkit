@@ -5,7 +5,7 @@
 
     <groupId>com.rom</groupId>
     <artifactId>rom-scraper</artifactId>
-    <version>0.1.4</version>
+    <version>0.1-SNAPSHOT</version>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -160,6 +160,8 @@
                     </execution>
                 </executions>
             </plugin>
+
+            <!-- Maven plugin for executing jpackage -->
         </plugins>
     </build>
 
@@ -201,11 +203,4 @@
             </properties>
         </profile>
     </profiles>
-
-    <pluginRepositories>
-        <pluginRepository>
-            <id>javapackage-maven-plugin</id>
-            <url>https://oss.sonatype.org/content/repositories/snapshots/</url>
-        </pluginRepository>
-    </pluginRepositories>
 </project>

@@ -131,14 +131,15 @@ jobs:
           mkdir -p target/jpackage-input/lib
           cp target/*.jar target/jpackage-input/
           cp target/lib/* target/jpackage-input/lib/
-          mvn org.panteleyev:jpackage-maven-plugin:jpackage `
-            -DappVersion=${{ needs.update-version.outputs.version }} `
-            -Dn=RomScraper `
-            -DmainClass=com.rom.scraper.Launcher `
-            -DinputDir=target/jpackage-input `
-            -Dvendor=com.rom `
-            -Ddestination=target/dist `
-            -Dtype=app-image
+          
+          # Use jpackage directly instead of Maven plugin
+          jpackage --name RomScraper `
+            --app-version ${{ needs.update-version.outputs.version }} `
+            --input target/jpackage-input `
+            --dest target/dist `
+            --main-jar $(dir target/*.jar | select -Last 1 | Split-Path -Leaf) `
+            --main-class com.rom.scraper.Launcher `
+            --type app-image
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
@@ -168,14 +169,16 @@ jobs:
           mkdir -p target/jpackage-input/lib
           cp target/*.jar target/jpackage-input/
           cp target/lib/* target/jpackage-input/lib/
-          mvn org.panteleyev:jpackage-maven-plugin:jpackage \
-            -DappVersion=${{ needs.update-version.outputs.version }} \
-            -Dn=RomScraper \
-            -DmainClass=com.rom.scraper.Launcher \
-            -DinputDir=target/jpackage-input \
-            -Dvendor=com.rom \
-            -Ddestination=target/dist \
-            -Dtype=app-image
+          
+          # Use jpackage directly instead of Maven plugin
+          MAIN_JAR=$(find target -maxdepth 1 -name "*.jar" | head -1 | xargs basename)
+          jpackage --name RomScraper \
+            --app-version ${{ needs.update-version.outputs.version }} \
+            --input target/jpackage-input \
+            --dest target/dist \
+            --main-jar $MAIN_JAR \
+            --main-class com.rom.scraper.Launcher \
+            --type app-image
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
@@ -205,14 +208,16 @@ jobs:
           mkdir -p target/jpackage-input/lib
           cp target/*.jar target/jpackage-input/
           cp target/lib/* target/jpackage-input/lib/
-          mvn org.panteleyev:jpackage-maven-plugin:jpackage \
-            -DappVersion=${{ needs.update-version.outputs.version }} \
-            -Dn=RomScraper \
-            -DmainClass=com.rom.scraper.Launcher \
-            -DinputDir=target/jpackage-input \
-            -Dvendor=com.rom \
-            -Ddestination=target/dist \
-            -Dtype=app-image
+          
+          # Use jpackage directly instead of Maven plugin
+          MAIN_JAR=$(find target -maxdepth 1 -name "*.jar" | head -1 | xargs basename)
+          jpackage --name RomScraper \
+            --app-version ${{ needs.update-version.outputs.version }} \
+            --input target/jpackage-input \
+            --dest target/dist \
+            --main-jar $MAIN_JAR \
+            --main-class com.rom.scraper.Launcher \
+            --type app-image
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
