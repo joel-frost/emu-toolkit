@@ -1,107 +1,123 @@
-name: Build, Package, and Release Runnable Executables
+name: Build & Release
 
 on:
   push:
     branches:
-      - releases/** # Trigger only for branches under /releases/
+      - 'release/**'
 
 jobs:
-  build-and-package:
-    name: Build Runnable Executables for Windows, macOS, and Linux
+  build:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
 
     steps:
-      # Step 1: Checkout the repository
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      # Step 2: Set up Java environment
       - name: Set up Java
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
-          java-version: 17
-          distribution: 'adopt'
+          distribution: 'temurin'
+          java-version: '17'
 
-      # Step 3: Auto-increment project version
-      - name: Auto-increment project version
-        shell: pwsh
-        run: |
-          $currentVersion = & mvn help:evaluate -Dexpression=project.version -q -DforceStdout | Select-String "\d+\.\d+\.\d+"
-          Write-Host "Current version: $currentVersion"
-          $versionParts = $currentVersion -split '\.'
-          $versionParts[2] = [int]$versionParts[2] + 1
-          $nextVersion = "$($versionParts[0]).$($versionParts[1]).$($versionParts[2])"
-          Write-Host "Next version: $nextVersion"
-          mvn versions:set -DnewVersion=$nextVersion
-          mvn versions:commit
+      - name: Cache Maven dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven
 
-      # Step 4: Build the application
-      - name: Build the project
+      - name: Build with Maven
         run: mvn clean package
 
-      # Step 5: Build and package runnable executables with jpackage
-      - name: Package with jpackage
+      - name: Extract version
+        id: version
+        run: echo "VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)" >> $GITHUB_ENV
+
+      - name: Prepare Artifacts
         run: |
-          mkdir -p build/runnables/windows
-          mkdir -p build/runnables/macos
-          mkdir -p build/runnables/linux
-          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            jpackage --type app-image --input target/ --dest build/runnables/windows \
-              --name RomScraper --main-jar target/$(ls target | grep '.jar$') \
-              --main-class com.rom.scraper.Launcher
-          elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
-            jpackage --type app-image --input target/ --dest build/runnables/macos \
-              --name RomScraper --main-jar target/$(ls target | grep '.jar$') \
-              --main-class com.rom.scraper.Launcher
-          elif [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
-            jpackage --type app-image --input target/ --dest build/runnables/linux \
-              --name RomScraper --main-jar target/$(ls target | grep '.jar$') \
-              --main-class com.rom.scraper.Launcher
+          mkdir artifacts
+          cp target/*.jar artifacts/romscraper-${{ env.VERSION }}.jar
+
+          # Find the runnable folder (which starts with the app name)
+          bundle_dir=$(find target/runnables -maxdepth 1 -type d -name "RomScraper*")
+
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            zip -r artifacts/romscraper-${{ env.VERSION }}-linux.zip "$bundle_dir"
+          elif [[ "$RUNNER_OS" == "Windows" ]]; then
+            7z a artifacts/romscraper-${{ env.VERSION }}-windows.zip "$bundle_dir"
+          elif [[ "$RUNNER_OS" == "macOS" ]]; then
+            ditto -c -k --sequesterRsrc --keepParent "$bundle_dir" artifacts/romscraper-${{ env.VERSION }}-macos.zip
           fi
 
-      # Step 6: Upload runnable artifacts
-      - name: Upload runnable executables
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: runnables-${{ matrix.os }}
-          path: build/runnables/
+          name: romscraper-${{ runner.os }}
+          path: artifacts/
 
   release:
-    name: Create GitHub Release
-    needs: build-and-package
+    needs: build
     runs-on: ubuntu-latest
-
     steps:
-      # Step 1: Checkout the repository
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      # Step 2: Generate release description based on commits
-      - name: Generate release description
-        id: generate_description
-        run: |
-          PREVIOUS_TAG=$(git describe --tags --abbrev=0 $(git rev-list --tags --max-count=1))
-          echo "Previous tag: $PREVIOUS_TAG"
-          COMMITS=$(git log $PREVIOUS_TAG..HEAD --oneline)
-          echo "Commits: $COMMITS"
-          echo "description=$COMMITS" >> $GITHUB_ENV
-
-      # Step 3: Create GitHub release with runnable executables and .jar
-      - name: Create Release
-        id: create_release
-        uses: softprops/action-gh-release@v1
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
         with:
-          body: |
-            ## Changes since last release:
-            ${{ env.description }}
-          tag_name: ${{ github.ref_name }}
-          files: |
-            build/runnables/windows/*
-            build/runnables/macos/*
-            build/runnables/linux/*
-            target/$(ls target | grep '.jar$')
+          path: downloaded/
+
+      - name: Extract version
+        id: version
+        run: echo "VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)" >> $GITHUB_ENV
+
+      - name: Generate Changelog
+        id: changelog
+        run: |
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -n "$LAST_TAG" ]; then
+            LOG=$(git log $LAST_TAG..HEAD --pretty=format:"- %s")
+          else
+            LOG=$(git log --pretty=format:"- %s")
+          fi
+          echo "CHANGELOG<<EOF" >> $GITHUB_ENV
+          echo "$LOG" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Create GitLab Release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+        run: |
+          PROJECT_ID=<YOUR_PROJECT_ID> # <- replace this with your GitLab numeric project ID
+
+          # Create release
+          curl --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+               --data "name=Release $VERSION" \
+               --data "tag_name=$VERSION" \
+               --data-urlencode "description=${{ env.CHANGELOG }}" \
+               --request POST "https://gitlab.com/api/v4/projects/${PROJECT_ID}/releases"
+
+          # Upload files
+          for f in downloaded/**; do
+            [ -f "$f" ] && curl --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+              --upload-file "$f" \
+              "https://gitlab.com/api/v4/projects/${PROJECT_ID}/uploads"
+          done
+
+      - name: Bump version
+        run: |
+          CURRENT=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          BASE=$(echo $CURRENT | awk -F. '{print $1 "." $2}')
+          PATCH=$(echo $CURRENT | awk -F. '{print $3 + 1}')
+          NEW_VERSION="${BASE}.${PATCH}-SNAPSHOT"
+
+          mvn versions:set -DnewVersion=$NEW_VERSION
+          mvn versions:commit
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git commit -am "Bump version to $NEW_VERSION"
+          git push
