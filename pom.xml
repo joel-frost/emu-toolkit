@@ -5,7 +5,7 @@
 
     <groupId>com.rom</groupId>
     <artifactId>rom-scraper</artifactId>
-    <version>0.0.2</version>
+    <version>1.0.3</version>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -48,6 +48,13 @@
     </dependencies>
 
     <build>
+        <!-- Include resources in the build -->
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+        </resources>
+
         <plugins>
             <!-- Maven Compiler Plugin -->
             <plugin>
@@ -128,6 +135,8 @@
                     <module>${main.class}</module>
                     <runtimeImage>${project.build.directory}/runtime-image</runtimeImage>
                     <input>${project.build.directory}/jpackage-input</input>
+                    <!-- Use a single icon parameter which will be applied based on platform -->
+                    <icon>${project.basedir}/src/main/resources/icons/icon${jpackage.icon.extension}</icon>
                     <javaOptions>
                         <option>-Dfile.encoding=UTF-8</option>
                     </javaOptions>
@@ -189,6 +198,7 @@
             </activation>
             <properties>
                 <jpackage.type>app-image</jpackage.type>
+                <jpackage.icon.extension>.ico</jpackage.icon.extension>
             </properties>
         </profile>
 
@@ -201,6 +211,7 @@
             </activation>
             <properties>
                 <jpackage.type>app-image</jpackage.type>
+                <jpackage.icon.extension>.icns</jpackage.icon.extension>
             </properties>
         </profile>
 
@@ -213,6 +224,7 @@
             </activation>
             <properties>
                 <jpackage.type>app-image</jpackage.type>
+                <jpackage.icon.extension>.png</jpackage.icon.extension>
             </properties>
         </profile>
     </profiles>

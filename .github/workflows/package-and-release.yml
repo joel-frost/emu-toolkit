@@ -169,13 +169,14 @@ jobs:
           # Get the main JAR file
           $mainJar = Get-ChildItem -Path "target" -Filter "*.jar" | Where-Object { !$_.Name.Contains("sources") -and !$_.Name.Contains("javadoc") } | Select-Object -ExpandProperty Name -Last 1
           
-          # Use jpackage directly
+          # Use jpackage directly with icon
           jpackage --name RomScraper `
             --app-version ${{ needs.update-version.outputs.version }} `
             --input target\jpackage-input `
             --dest target\dist `
             --main-jar $mainJar `
             --main-class com.rom.scraper.Launcher `
+            --icon src\main\resources\icons\icon.ico `
             --type app-image
           
           echo "Listing jpackage output directory contents:"
@@ -211,7 +212,7 @@ jobs:
           cp target/*.jar target/jpackage-input/
           cp target/lib/* target/jpackage-input/lib/
           
-          # Use jpackage directly
+          # Use jpackage directly with icon
           MAIN_JAR=$(find target -maxdepth 1 -name "*.jar" | head -1 | xargs basename)
           jpackage --name RomScraper \
             --app-version ${{ needs.update-version.outputs.version }} \
@@ -219,6 +220,7 @@ jobs:
             --dest target/dist \
             --main-jar $MAIN_JAR \
             --main-class com.rom.scraper.Launcher \
+            --icon src/main/resources/icons/icon.icns \
             --type app-image
           
           echo "Listing jpackage output directory contents:"
@@ -254,7 +256,7 @@ jobs:
           cp target/*.jar target/jpackage-input/
           cp target/lib/* target/jpackage-input/lib/
           
-          # Use jpackage directly
+          # Use jpackage directly with icon
           MAIN_JAR=$(find target -maxdepth 1 -name "*.jar" | head -1 | xargs basename)
           jpackage --name RomScraper \
             --app-version ${{ needs.update-version.outputs.version }} \
@@ -262,6 +264,7 @@ jobs:
             --dest target/dist \
             --main-jar $MAIN_JAR \
             --main-class com.rom.scraper.Launcher \
+            --icon src/main/resources/icons/icon.png \
             --type app-image
           
           echo "Listing jpackage output directory contents:"
