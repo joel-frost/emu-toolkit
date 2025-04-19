@@ -24,14 +24,19 @@ public class DownloadService {
     private final ObservableList<DownloadTask> downloadTasks;
     private final int BUFFER_SIZE = 8192;
     private final Map<DownloadTask, Future<?>> taskFutures;
-    private volatile int maxParallelDownloads = 5;
     private final int PROGRESS_UPDATE_INTERVAL_MS = 100;
+
+    // Fixed to 5 parallel downloads
+    private final int maxParallelDownloads = 5;
 
     // Use a single-threaded executor to handle download queue management
     private final ExecutorService queueManagerExecutor = Executors.newSingleThreadExecutor();
 
     // Use a fixed executor for the actual downloads
-    private ExecutorService downloadExecutor;
+    private final ExecutorService downloadExecutor;
+
+    // Use a scheduled executor for delayed removal of cancelled tasks
+    private final ScheduledExecutorService scheduledExecutor = Executors.newSingleThreadScheduledExecutor();
 
     // Queue for pending downloads
     private final Queue<DownloadTask> pendingDownloads = new ConcurrentLinkedQueue<>();
@@ -46,7 +51,7 @@ public class DownloadService {
         this.downloadTasks = FXCollections.observableArrayList();
         this.taskFutures = new ConcurrentHashMap<>();
 
-        // Initialize with a fixed thread pool
+        // Initialize with a fixed thread pool of 5 parallel downloads
         this.downloadExecutor = Executors.newFixedThreadPool(maxParallelDownloads);
     }
 
@@ -190,6 +195,22 @@ public class DownloadService {
                     // Check if we should cancel
                     if (Thread.currentThread().isInterrupted()) {
                         Platform.runLater(() -> task.setStatus("Cancelled"));
+
+                        // Close resources manually before returning
+                        outputStream.close();
+
+                        // Delete the partial file
+                        if (destFile.exists()) {
+                            destFile.delete();
+                        }
+
+                        // Schedule task removal after delay
+                        scheduledExecutor.schedule(() -> {
+                            Platform.runLater(() -> {
+                                downloadTasks.remove(task);
+                            });
+                        }, 1, TimeUnit.SECONDS);
+
                         return;
                     }
 
@@ -254,6 +275,12 @@ public class DownloadService {
 
         } catch (IOException e) {
             e.printStackTrace();
+
+            // Delete the partial file on error
+            if (destFile.exists()) {
+                destFile.delete();
+            }
+
             Platform.runLater(() -> task.setStatus("Error: " + e.getMessage()));
         } finally {
             if (connection != null) {
@@ -293,8 +320,49 @@ public class DownloadService {
                 task.setStatus("Cancelled");
             });
 
+            // Delete the partially downloaded file
+            File destFile = new File(task.getDestination());
+            if (destFile.exists()) {
+                destFile.delete();
+            }
+
+            // Schedule removal of the task after 1 second delay
+            scheduledExecutor.schedule(() -> {
+                Platform.runLater(() -> {
+                    downloadTasks.remove(task);
+                });
+            }, 1, TimeUnit.SECONDS);
+
             // Process queue to start next download
             processDownloadQueue();
+        }
+    }
+
+    /**
+     * Cancels all downloads that are currently in progress or queued.
+     */
+    public void cancelAllTasks() {
+        try {
+            queueLock.lock();
+
+            // Create a list of tasks to cancel to avoid concurrent modification
+            List<DownloadTask> tasksToCancel = new ArrayList<>();
+
+            // Find all tasks that are active or queued
+            for (DownloadTask task : downloadTasks) {
+                String status = task.getStatus();
+                if (status.equals("Queued") || status.startsWith("Downloading")) {
+                    tasksToCancel.add(task);
+                }
+            }
+
+            // Cancel each task
+            for (DownloadTask task : tasksToCancel) {
+                cancelTask(task);
+            }
+
+        } finally {
+            queueLock.unlock();
         }
     }
 
@@ -319,7 +387,7 @@ public class DownloadService {
     }
 
     public boolean canClearTasks() {
-        // Can clear if any tasks are in a final state
+        // Can clear if any tasks are in a final state (Complete, Cancelled, or Error)
         for (DownloadTask task : downloadTasks) {
             String status = task.getStatus();
             if ("Complete".equals(status) || "Cancelled".equals(status) ||
@@ -330,39 +398,11 @@ public class DownloadService {
         return false;
     }
 
-    public void setParallelDownloads(int count) {
-        if (count <= 0 || count > 20) {
-            return; // Ignore invalid values
-        }
-
-        if (this.maxParallelDownloads != count) {
-            try {
-                queueLock.lock();
-
-                // Update the limit
-                this.maxParallelDownloads = count;
-
-                // Shutdown previous executor and create a new one with the updated count
-                if (downloadExecutor != null) {
-                    ExecutorService oldExecutor = downloadExecutor;
-                    downloadExecutor = Executors.newFixedThreadPool(count);
-
-                    // Shut down the old executor but allow running tasks to complete
-                    oldExecutor.shutdown();
-                }
-
-                // Process queue to potentially start more downloads
-                processDownloadQueue();
-            } finally {
-                queueLock.unlock();
-            }
-        }
-    }
-
     public void shutdown() {
         if (downloadExecutor != null) {
             downloadExecutor.shutdownNow();
         }
         queueManagerExecutor.shutdownNow();
+        scheduledExecutor.shutdownNow();
     }
 }

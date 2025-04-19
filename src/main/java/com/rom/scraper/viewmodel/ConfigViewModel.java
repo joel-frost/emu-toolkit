@@ -23,7 +23,6 @@ public class ConfigViewModel {
     // Properties
     private final StringProperty urlProperty = new SimpleStringProperty("");
     private final StringProperty downloadFolderProperty = new SimpleStringProperty("");
-    private final IntegerProperty parallelDownloadsProperty = new SimpleIntegerProperty(5);
     private final ObjectProperty<String> selectedExtensionProperty = new SimpleObjectProperty<>("(Auto Select)");
     private final BooleanProperty customExtensionEnabledProperty = new SimpleBooleanProperty(false);
     private final StringProperty customExtensionProperty = new SimpleStringProperty("");
@@ -53,18 +52,6 @@ public class ConfigViewModel {
                 Platform.runLater(() -> this.loadingProperty.set(newVal)));
         romScraperService.statusMessageProperty().addListener((obs, oldVal, newVal) ->
                 Platform.runLater(() -> this.statusMessageProperty.set(newVal)));
-
-        // Add listener to parallel downloads property to update the download service
-        parallelDownloadsProperty.addListener((obs, oldValue, newValue) -> {
-            if (downloadService != null) {
-                downloadService.setParallelDownloads(newValue.intValue());
-            }
-        });
-
-        // Initialize the download service with the current setting
-        if (downloadService != null) {
-            downloadService.setParallelDownloads(parallelDownloadsProperty.get());
-        }
     }
 
     public void connectToUrl(Consumer<Boolean> callback) {
@@ -189,17 +176,13 @@ public class ConfigViewModel {
         } else return !dir.isDirectory();
     }
 
-    // Getters and setters for properties
+    // Getters for properties
     public StringProperty urlProperty() {
         return urlProperty;
     }
 
     public StringProperty downloadFolderProperty() {
         return downloadFolderProperty;
-    }
-
-    public IntegerProperty parallelDownloadsProperty() {
-        return parallelDownloadsProperty;
     }
 
     public ObjectProperty<String> selectedExtensionProperty() {

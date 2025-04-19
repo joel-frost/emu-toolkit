@@ -21,7 +21,6 @@ public class ConfigView {
     private TextField urlField;
     private TextField downloadFolderField;
     private ComboBox<String> fileExtensionSelector;
-    private Spinner<Integer> threadCountSpinner;
     private CheckBox customExtensionCheckbox;
     private TextField customExtensionField;
     private ComboBox<String> regionSelector;
@@ -40,14 +39,11 @@ public class ConfigView {
         // Download folder selection
         HBox folderBox = createFolderBox();
 
-        // Thread count and region options
+        // File extension and region options in one row
         HBox optionsBox = createOptionsBox();
 
-        // File extension selection
-        HBox extensionBox = createExtensionBox();
-
         // Add all components to the panel
-        panel.getChildren().addAll(urlBox, folderBox, optionsBox, extensionBox);
+        panel.getChildren().addAll(urlBox, folderBox, optionsBox);
 
         return panel;
     }
@@ -96,28 +92,7 @@ public class ConfigView {
         HBox optionsBox = new HBox(20);
         optionsBox.setAlignment(Pos.CENTER_LEFT);
 
-        // Thread count spinner
-        Label threadLabel = new Label("Parallel Downloads:");
-        threadCountSpinner = new Spinner<>(1, 20, 5);
-        threadCountSpinner.setEditable(true);
-        threadCountSpinner.setPrefWidth(80);
-        threadCountSpinner.getValueFactory().valueProperty().bindBidirectional(viewModel.parallelDownloadsProperty().asObject());
-
-        // Region selector
-        Label regionLabel = new Label("Region:");
-        regionSelector = new ComboBox<>();
-        regionSelector.setPrefWidth(100);
-        regionSelector.itemsProperty().bind(viewModel.availableRegionsProperty());
-        regionSelector.valueProperty().bindBidirectional(viewModel.selectedRegionProperty());
-
-        optionsBox.getChildren().addAll(threadLabel, threadCountSpinner, regionLabel, regionSelector);
-        return optionsBox;
-    }
-
-    private HBox createExtensionBox() {
-        HBox extensionBox = new HBox(10);
-        extensionBox.setAlignment(Pos.CENTER_LEFT);
-
+        // File extension UI components
         Label extLabel = new Label("File Extension:");
 
         // Extension selector
@@ -150,8 +125,18 @@ public class ConfigView {
             }
         });
 
-        extensionBox.getChildren().addAll(extLabel, fileExtensionSelector, customExtensionCheckbox, customExtensionField);
-        return extensionBox;
+        // Region selector - moved to the right
+        Label regionLabel = new Label("Region:");
+        regionSelector = new ComboBox<>();
+        regionSelector.setPrefWidth(100);
+        regionSelector.itemsProperty().bind(viewModel.availableRegionsProperty());
+        regionSelector.valueProperty().bindBidirectional(viewModel.selectedRegionProperty());
+
+        // Add all components to options box - region at the end
+        optionsBox.getChildren().addAll(extLabel, fileExtensionSelector,
+                customExtensionCheckbox, customExtensionField,
+                regionLabel, regionSelector);
+        return optionsBox;
     }
 
     private void browseFolder() {
