@@ -310,23 +310,6 @@ public class MainViewController {
         return scrollPane;
     }
 
-    private HBox createStatusBar() {
-        HBox statusBar = new HBox(10);
-        statusBar.setPadding(new Insets(5, 10, 5, 10));
-        statusBar.setStyle("-fx-background-color: #f0f0f0;");
-
-        loadingIndicator = new ProgressIndicator(-1);
-        loadingIndicator.setVisible(false);
-        loadingIndicator.setPrefSize(16, 16);
-
-        statusLabel = new Label("Ready");
-
-        statusBar.getChildren().addAll(loadingIndicator, statusLabel);
-        HBox.setHgrow(statusLabel, Priority.ALWAYS);
-
-        return statusBar;
-    }
-
     // Helper methods
     private void connectToUrl() {
         String url = urlField.getText().trim();
