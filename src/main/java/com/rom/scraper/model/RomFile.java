@@ -1,4 +1,4 @@
-package com.rom.scraper;
+package com.rom.scraper.model;
 
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;

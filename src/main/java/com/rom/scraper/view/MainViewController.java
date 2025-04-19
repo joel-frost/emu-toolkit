@@ -1,5 +1,9 @@
-package com.rom.scraper;
+package com.rom.scraper.view;
 
+import com.rom.scraper.model.DownloadTask;
+import com.rom.scraper.model.RomFile;
+import com.rom.scraper.model.RomScraperModel;
+import com.rom.scraper.service.DownloadManager;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
