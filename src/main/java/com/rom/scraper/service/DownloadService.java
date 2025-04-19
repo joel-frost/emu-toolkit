@@ -10,23 +10,30 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.RandomAccessFile;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Manages the download queue and download worker threads.
+ * Service responsible for managing downloads.
  */
-public class DownloadManager {
+public class DownloadService {
 
     private final ObservableList<DownloadTask> downloadTasks;
     private final ExecutorService downloadExecutor;
     private final int BUFFER_SIZE = 8192;
+    private final Map<DownloadTask, Future<?>> taskFutures;
 
-    public DownloadManager() {
+    public DownloadService() {
         this.downloadTasks = FXCollections.observableArrayList();
         this.downloadExecutor = Executors.newFixedThreadPool(5);
+        this.taskFutures = new HashMap<>();
     }
 
     public ObservableList<DownloadTask> getDownloadTasks() {
@@ -40,19 +47,10 @@ public class DownloadManager {
             // Create a task that's already complete
             DownloadTask task = new DownloadTask(romFile.getName(), romFile.getUrl(), destFile.getPath());
             task.setProgress(1.0);
-            task.setStatus("Already exists");
+            task.setStatus("Complete");
 
             Platform.runLater(() -> {
                 downloadTasks.add(task);
-                // Remove it after a short delay
-                new Thread(() -> {
-                    try {
-                        Thread.sleep(3000);
-                        Platform.runLater(() -> downloadTasks.remove(task));
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                    }
-                }).start();
             });
             return;
         }
@@ -66,10 +64,12 @@ public class DownloadManager {
 
         // Create new download task
         DownloadTask task = new DownloadTask(romFile.getName(), romFile.getUrl(), destFile.getPath());
+
         Platform.runLater(() -> downloadTasks.add(task));
 
         // Start download
-        downloadExecutor.submit(() -> downloadFile(task));
+        Future<?> future = downloadExecutor.submit(() -> downloadFile(task));
+        taskFutures.put(task, future);
     }
 
     private void downloadFile(DownloadTask task) {
@@ -92,7 +92,8 @@ public class DownloadManager {
             connection.setRequestMethod("GET");
             connection.connect();
 
-            if (connection.getResponseCode() != HttpURLConnection.HTTP_OK) {
+            int responseCode = connection.getResponseCode();
+            if (responseCode != HttpURLConnection.HTTP_OK) {
                 HttpURLConnection finalConnection = connection;
                 Platform.runLater(() -> {
                     try {
@@ -116,10 +117,10 @@ public class DownloadManager {
                 long totalBytesRead = 0;
                 Platform.runLater(() -> task.setStatus("Downloading"));
 
-
                 long lastUpdateTime = System.currentTimeMillis();
 
                 while ((bytesRead = inputStream.read(buffer)) != -1) {
+                    // Check if we should cancel
                     if (Thread.currentThread().isInterrupted()) {
                         Platform.runLater(() -> task.setStatus("Cancelled"));
                         return;
@@ -157,36 +158,55 @@ public class DownloadManager {
         }
     }
 
-    public void pauseAll() {
-        // Implementation would depend on a more complex download system
-        // that supports pausing. For simplicity, this is left as a stub.
-        for (DownloadTask task : downloadTasks) {
-            if ("Downloading".equals(task.getStatus())) {
-                task.setStatus("Paused");
-            }
-        }
-    }
-
-    public void resumeAll() {
-        // Implementation would depend on a more complex download system
-        // that supports resuming. For simplicity, this is left as a stub.
-        for (DownloadTask task : downloadTasks) {
-            if ("Paused".equals(task.getStatus())) {
-                task.setStatus("Downloading");
-            }
-        }
-    }
+    // Removed pauseAll(), resumeAll(), pauseTask(), and resumeTask() as requested
 
     public void cancelTask(DownloadTask task) {
-        // In a real implementation, we would maintain a map of tasks to futures
-        // and cancel the appropriate future here
         if (downloadTasks.contains(task)) {
+            // Cancel the future if it exists
+            Future<?> future = taskFutures.get(task);
+            if (future != null && !future.isDone() && !future.isCancelled()) {
+                future.cancel(true);
+            }
+
             Platform.runLater(() -> {
                 task.setStatus("Cancelled");
-                // Optionally remove from the list
-                // downloadTasks.remove(task);
             });
         }
+    }
+
+    public void clearCompletedTasks() {
+        // Create a list to store tasks to be removed
+        // (to avoid ConcurrentModificationException)
+        ObservableList<DownloadTask> tasksToRemove = FXCollections.observableArrayList();
+
+        for (DownloadTask task : downloadTasks) {
+            String status = task.getStatus();
+            if ("Complete".equals(status) || "Cancelled".equals(status) ||
+                    status.startsWith("Error")) {
+                tasksToRemove.add(task);
+            }
+        }
+
+        // Now remove all tasks in the secondary list
+        Platform.runLater(() -> downloadTasks.removeAll(tasksToRemove));
+    }
+
+    public boolean canClearTasks() {
+        // Can clear if all tasks are in a final state
+        for (DownloadTask task : downloadTasks) {
+            String status = task.getStatus();
+            if (!"Complete".equals(status) && !"Cancelled".equals(status) &&
+                    !status.startsWith("Error")) {
+                return false;
+            }
+        }
+        return !downloadTasks.isEmpty();
+    }
+
+    public void setParallelDownloads(int count) {
+        // In a more advanced implementation, we would recreate the ExecutorService
+        // with the new thread count. For simplicity, we'll just note it here.
+        System.out.println("Setting parallel downloads to: " + count);
     }
 
     public void shutdown() {
