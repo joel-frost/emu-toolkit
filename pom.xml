@@ -62,7 +62,7 @@
                 <version>3.1.0</version>
                 <executions>
                     <execution>
-                        <id>create-installers</id>
+                        <id>create-runnable</id>
                         <phase>package</phase>
                         <goals>
                             <goal>exec</goal>
@@ -70,23 +70,29 @@
                         <configuration>
                             <executable>jpackage</executable>
                             <arguments>
-                                <!-- Shared Arguments -->
+                                <!-- Input Directory -->
                                 <argument>--input</argument>
                                 <argument>${project.build.directory}</argument>
-                                <argument>--main-jar</argument>
-                                <argument>${project.build.finalName}.jar</argument>
-                                <argument>--main-class</argument>
-                                <argument>com.rom.scraper.Launcher</argument>
+
+                                <!-- Output Directory -->
+                                <argument>--dest</argument>
+                                <argument>${project.build.directory}/runnables</argument>
+
+                                <!-- Application Name -->
                                 <argument>--name</argument>
                                 <argument>RomScraper</argument>
 
-                                <!-- Platform-Specific Type -->
-                                <argument>--type</argument>
-                                <argument>${jpackage.type}</argument>
+                                <!-- Main Application JAR -->
+                                <argument>--main-jar</argument>
+                                <argument>${project.build.finalName}.jar</argument>
 
-                                <!-- Output Directory -->
-                                <argument>--output</argument>
-                                <argument>${project.build.directory}/installers</argument>
+                                <!-- Main Class -->
+                                <argument>--main-class</argument>
+                                <argument>com.rom.scraper.Launcher</argument>
+
+                                <!-- Output Type -->
+                                <argument>--type</argument>
+                                <argument>app-image</argument>
                             </arguments>
                         </configuration>
                     </execution>
