@@ -11,10 +11,8 @@ import javafx.beans.property.StringProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 /**
@@ -23,18 +21,24 @@ import java.util.stream.Collectors;
 public class BatchViewModel {
     private final RomScraperService romScraperService;
     private final DownloadService downloadService;
+    private final ConfigViewModel configViewModel;
 
     // Properties
     private final StringProperty batchInputProperty = new SimpleStringProperty("");
     private final BooleanProperty processingProperty = new SimpleBooleanProperty(false);
     private final ObservableList<String> batchResultsProperty = FXCollections.observableArrayList();
 
-    public BatchViewModel(RomScraperService romScraperService, DownloadService downloadService) {
+    // Storage for multiple matches that need user selection
+    private final Map<String, List<RomFile>> pendingSelections = new HashMap<>();
+    private final ObservableList<String> pendingGames = FXCollections.observableArrayList();
+
+    public BatchViewModel(RomScraperService romScraperService, DownloadService downloadService, ConfigViewModel configViewModel) {
         this.romScraperService = romScraperService;
         this.downloadService = downloadService;
+        this.configViewModel = configViewModel;
     }
 
-    public void processBatch(String downloadFolder, String selectedRegion) {
+    public void processBatch(String downloadFolder) {
         String input = batchInputProperty.get().trim();
         if (input.isEmpty()) {
             return;
@@ -53,13 +57,18 @@ public class BatchViewModel {
 
         processingProperty.set(true);
         batchResultsProperty.clear();
+        pendingSelections.clear();
+        pendingGames.clear();
         batchResultsProperty.add("Processing batch of " + gamesList.size() + " games");
+
+        // Get the region from ConfigViewModel
+        String region = configViewModel.getSelectedRegion();
 
         // Create a CompletableFuture chain to process games sequentially
         CompletableFuture<Void> future = CompletableFuture.completedFuture(null);
 
         for (String game : gamesList) {
-            future = future.thenCompose(v -> processGame(game, downloadFolder, selectedRegion));
+            future = future.thenCompose(v -> processGame(game, downloadFolder, region));
         }
 
         future.whenComplete((v, error) -> {
@@ -71,6 +80,10 @@ public class BatchViewModel {
             } else {
                 Platform.runLater(() -> {
                     batchResultsProperty.add("Batch processing complete.");
+                    if (!pendingSelections.isEmpty()) {
+                        batchResultsProperty.add("Found " + pendingSelections.size() + " games with multiple matches. Please manually select them from the pending list.");
+                        pendingGames.addAll(pendingSelections.keySet());
+                    }
                     processingProperty.set(false);
                 });
             }
@@ -83,7 +96,7 @@ public class BatchViewModel {
         Platform.runLater(() -> batchResultsProperty.add("Searching for: " + game));
 
         // Convert to CompletableFuture pattern
-        romScraperService.searchRoms(game, "Any".equals(region) ? null : region, matches -> {
+        romScraperService.searchRoms(game, region, matches -> {
             if (matches.isEmpty()) {
                 Platform.runLater(() -> batchResultsProperty.add("  - No matches found for: " + game));
                 future.complete(null);
@@ -94,31 +107,56 @@ public class BatchViewModel {
                 Platform.runLater(() -> batchResultsProperty.add("  + Added to queue: " + rom.getName()));
                 future.complete(null);
             } else {
-                // Multiple matches - need user interaction
+                // Multiple matches - store for later user selection
                 Platform.runLater(() -> {
-                    batchResultsProperty.add("  ! Multiple matches found for: " + game + " (first match will be used)");
-                    // In a real implementation, we might show a dialog here
-                    // For simplicity, we'll just take the first match
-                    RomFile firstMatch = matches.get(0);
-                    downloadService.addToQueue(firstMatch, downloadFolder);
-                    batchResultsProperty.add("  + Added to queue: " + firstMatch.getName());
-                    future.complete(null);
+                    batchResultsProperty.add("  ! Multiple matches found for: " + game + " (skipped for manual selection)");
+                    pendingSelections.put(game, new ArrayList<>(matches));
                 });
+                future.complete(null);
             }
         });
 
         return future;
     }
 
-    // Method to handle user selection for multiple matches
-    public void selectMatchForBatch(RomFile selectedRom, String downloadFolder, Consumer<Boolean> callback) {
-        if (selectedRom != null) {
+    /**
+     * Gets a list of games that require manual selection.
+     */
+    public ObservableList<String> getPendingGames() {
+        return pendingGames;
+    }
+
+    /**
+     * Gets the matches for a specific game.
+     */
+    public List<RomFile> getMatchesForGame(String game) {
+        return pendingSelections.getOrDefault(game, Collections.emptyList());
+    }
+
+    /**
+     * Adds a selected ROM to the download queue and removes it from pending selections.
+     */
+    public void selectMatchForDownload(String game, RomFile selectedRom, String downloadFolder) {
+        if (selectedRom != null && pendingSelections.containsKey(game)) {
             downloadService.addToQueue(selectedRom, downloadFolder);
-            Platform.runLater(() -> batchResultsProperty.add("  + Added to queue: " + selectedRom.getName()));
-            callback.accept(true);
-        } else {
-            Platform.runLater(() -> batchResultsProperty.add("  - Selection skipped"));
-            callback.accept(false);
+            Platform.runLater(() -> {
+                batchResultsProperty.add("  + Added to queue: " + selectedRom.getName());
+                pendingSelections.remove(game);
+                pendingGames.remove(game);
+            });
+        }
+    }
+
+    /**
+     * Skips a game from the pending selections without downloading it.
+     */
+    public void skipPendingGame(String game) {
+        if (pendingSelections.containsKey(game)) {
+            Platform.runLater(() -> {
+                batchResultsProperty.add("  - Skipped: " + game);
+                pendingSelections.remove(game);
+                pendingGames.remove(game);
+            });
         }
     }
 

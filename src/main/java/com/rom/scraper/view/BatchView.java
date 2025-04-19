@@ -1,15 +1,16 @@
 package com.rom.scraper.view;
 
+import com.rom.scraper.model.RomFile;
+import com.rom.scraper.util.DialogHelper;
 import com.rom.scraper.viewmodel.BatchViewModel;
 import com.rom.scraper.viewmodel.ConfigViewModel;
 import javafx.geometry.Insets;
-import javafx.scene.control.Button;
-import javafx.scene.control.Label;
-import javafx.scene.control.ListView;
-import javafx.scene.control.ScrollPane;
-import javafx.scene.control.TextArea;
+import javafx.scene.control.*;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
+
+import java.util.List;
 
 /**
  * View for batch processing functionality.
@@ -48,7 +49,28 @@ public class BatchView {
         ListView<String> resultsListView = new ListView<>();
         resultsListView.setItems(batchViewModel.getBatchResults());
         VBox.setVgrow(resultsListView, Priority.ALWAYS);
-        resultsListView.setPrefHeight(300);
+        resultsListView.setPrefHeight(200);
+
+        // Pending selections section
+        Label pendingLabel = new Label("Pending Selections (games with multiple matches):");
+
+        // Pending games list
+        ListView<String> pendingListView = new ListView<>();
+        pendingListView.setItems(batchViewModel.getPendingGames());
+        pendingListView.setPrefHeight(150);
+        VBox.setVgrow(pendingListView, Priority.SOMETIMES);
+
+        // Button to handle selected pending game
+        HBox pendingButtonBox = new HBox(10);
+        Button selectButton = new Button("Select ROM");
+        selectButton.setOnAction(e -> handlePendingSelection(pendingListView.getSelectionModel().getSelectedItem()));
+        selectButton.disableProperty().bind(pendingListView.getSelectionModel().selectedItemProperty().isNull());
+
+        Button skipButton = new Button("Skip");
+        skipButton.setOnAction(e -> handleSkipPending(pendingListView.getSelectionModel().getSelectedItem()));
+        skipButton.disableProperty().bind(pendingListView.getSelectionModel().selectedItemProperty().isNull());
+
+        pendingButtonBox.getChildren().addAll(selectButton, skipButton);
 
         // Add all components to the content
         content.getChildren().addAll(
@@ -56,13 +78,15 @@ public class BatchView {
                 batchInput,
                 processBatchButton,
                 resultsLabel,
-                resultsListView
+                resultsListView,
+                pendingLabel,
+                pendingListView,
+                pendingButtonBox
         );
 
         // Wrap in scroll pane
         ScrollPane scrollPane = new ScrollPane(content);
         scrollPane.setFitToWidth(true);
-        scrollPane.setFitToHeight(true);
 
         return scrollPane;
     }
@@ -78,15 +102,50 @@ public class BatchView {
         // Get the download folder path
         String downloadFolder = configViewModel.downloadFolderProperty().get();
 
-        // Get selected region
-        String region = configViewModel.selectedExtensionProperty().get();
+        // Process the batch using the region from ConfigViewModel
+        batchViewModel.processBatch(downloadFolder);
+    }
 
-        // Process the batch
-        batchViewModel.processBatch(downloadFolder, region);
+    private void handlePendingSelection(String game) {
+        if (game == null) return;
+
+        // Get the download folder
+        String downloadFolder = configViewModel.downloadFolderProperty().get();
+        if (downloadFolder == null || downloadFolder.isEmpty()) {
+            showError("Download Folder Required",
+                    "Please select a download folder before selecting ROMs.");
+            return;
+        }
+
+        // Get matches for the selected game
+        List<RomFile> matches = batchViewModel.getMatchesForGame(game);
+        if (matches.isEmpty()) {
+            showError("No Matches",
+                    "No matches found for " + game);
+            return;
+        }
+
+        // Show dialog for user to select a ROM
+        DialogHelper.showMultipleMatchesDialog(
+                null, // Use null for owner to center on screen
+                game,
+                matches,
+                selectedRom -> {
+                    if (selectedRom != null) {
+                        batchViewModel.selectMatchForDownload(game, selectedRom, downloadFolder);
+                    }
+                }
+        );
+    }
+
+    private void handleSkipPending(String game) {
+        if (game != null) {
+            batchViewModel.skipPendingGame(game);
+        }
     }
 
     private void showError(String title, String message) {
-        javafx.scene.control.Alert alert = new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.ERROR);
+        Alert alert = new Alert(Alert.AlertType.ERROR);
         alert.setTitle(title);
         alert.setHeaderText(null);
         alert.setContentText(message);

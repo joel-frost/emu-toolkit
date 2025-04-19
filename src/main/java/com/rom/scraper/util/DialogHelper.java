@@ -45,7 +45,9 @@ public class DialogHelper {
         Dialog<RomFile> dialog = new Dialog<>();
         dialog.setTitle("Multiple Matches Found");
         dialog.setHeaderText("Select a ROM file for: " + game);
-        dialog.initOwner(owner);
+        if (owner != null) {
+            dialog.initOwner(owner);
+        }
 
         // Buttons
         ButtonType selectButtonType = new ButtonType("Select", ButtonBar.ButtonData.OK_DONE);
@@ -63,9 +65,23 @@ public class DialogHelper {
             }
         });
 
+        // Select the first item by default
+        if (!matches.isEmpty()) {
+            listView.getSelectionModel().select(0);
+        }
+
+        // Make the dialog a bit bigger
+        listView.setPrefWidth(600);
+        listView.setPrefHeight(300);
+
         VBox content = new VBox(10);
+        content.getChildren().add(new Label("Please select one ROM from the list below:"));
         content.getChildren().add(listView);
         dialog.getDialogPane().setContent(content);
+
+        // Make sure the select button is only enabled when an item is selected
+        Button selectButton = (Button) dialog.getDialogPane().lookupButton(selectButtonType);
+        selectButton.disableProperty().bind(listView.getSelectionModel().selectedItemProperty().isNull());
 
         // Convert result
         dialog.setResultConverter(dialogButton -> {

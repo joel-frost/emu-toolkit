@@ -38,8 +38,8 @@ public class ApplicationController {
 
         // Create view models
         this.configViewModel = new ConfigViewModel(romScraperService);
-        this.searchViewModel = new SearchViewModel(romScraperService, downloadService);
-        this.batchViewModel = new BatchViewModel(romScraperService, downloadService);
+        this.searchViewModel = new SearchViewModel(romScraperService, downloadService, configViewModel);
+        this.batchViewModel = new BatchViewModel(romScraperService, downloadService, configViewModel);
         this.downloadViewModel = new DownloadViewModel(downloadService);
 
         // Create and set up main view

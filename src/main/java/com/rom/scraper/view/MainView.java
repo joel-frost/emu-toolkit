@@ -73,7 +73,7 @@ public class MainView {
         root.setBottom(statusBar);
 
         // Set the scene
-        Scene scene = new Scene(root, 800, 750);
+        Scene scene = new Scene(root, 800, 800);
         primaryStage.setScene(scene);
         primaryStage.show();
     }
