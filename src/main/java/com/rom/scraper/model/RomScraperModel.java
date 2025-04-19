@@ -21,15 +21,27 @@ public class RomScraperModel {
     private List<RomFile> romFiles;
     private Pattern revisionPattern = Pattern.compile("\\(Rev (\\d+)\\)");
     private String[] filterTerms = {"(demo", "(beta", "(pirate", "(sample", "virtual console"};
+    private String currentExtension = "";
 
     public RomScraperModel() {
         this.romFiles = new ArrayList<>();
     }
 
+    public boolean hasConnectionWithExtension(String extension) {
+        return currentExtension.equals(extension);
+    }
+
     public boolean connectToUrl(String url, String fileExtension) {
-        if (!fileExtension.startsWith(".")) {
+        if (fileExtension == null) {
+            fileExtension = "";
+        }
+
+        if (!fileExtension.isEmpty() && !fileExtension.startsWith(".")) {
             fileExtension = "." + fileExtension;
         }
+
+        // Store the current extension
+        this.currentExtension = fileExtension;
 
         try {
             Document doc = Jsoup.connect(url).get();
@@ -39,7 +51,7 @@ public class RomScraperModel {
 
             for (Element link : links) {
                 String href = link.attr("href");
-                if (href.endsWith(fileExtension)) {
+                if (fileExtension.isEmpty() || href.endsWith(fileExtension)) {
                     String romName = URLDecoder.decode(href, StandardCharsets.UTF_8);
 
                     // Filter out unwanted ROMs
@@ -193,4 +205,5 @@ public class RomScraperModel {
         }
         return count;
     }
+
 }
