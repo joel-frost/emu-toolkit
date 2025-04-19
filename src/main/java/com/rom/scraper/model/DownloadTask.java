@@ -1,18 +1,16 @@
 package com.rom.scraper.model;
 
-import javafx.beans.property.DoubleProperty;
-import javafx.beans.property.SimpleDoubleProperty;
-import javafx.beans.property.SimpleStringProperty;
-import javafx.beans.property.StringProperty;
+import javafx.beans.property.*;
+import lombok.Getter;
 
 /**
  * Represents a single download task with observable properties for UI binding.
  */
 public class DownloadTask {
 
+    @Getter private final String url;
+    @Getter private final String destination;
     private final StringProperty filename;
-    private final String url;
-    private final String destination;
     private final DoubleProperty progress;
     private final StringProperty status;
 
@@ -30,14 +28,6 @@ public class DownloadTask {
 
     public StringProperty filenameProperty() {
         return filename;
-    }
-
-    public String getUrl() {
-        return url;
-    }
-
-    public String getDestination() {
-        return destination;
     }
 
     public double getProgress() {
