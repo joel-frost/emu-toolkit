@@ -23,9 +23,7 @@ import javafx.stage.DirectoryChooser;
 import javafx.stage.Stage;
 
 import java.io.File;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -45,6 +43,9 @@ public class MainViewController {
     private TabPane mainTabPane;
     private ProgressIndicator loadingIndicator;
     private Label statusLabel;
+    private CheckBox customExtensionCheckbox;
+    private TextField customExtensionField;
+    private HBox extensionContainer;
 
     // Model components
     private RomScraperModel model;
@@ -108,7 +109,7 @@ public class MainViewController {
 
         // URL input
         HBox urlBox = new HBox(10);
-        urlBox.setAlignment(Pos.CENTER_LEFT); // Align elements in the URL input
+        urlBox.setAlignment(Pos.CENTER_LEFT);
         Label urlLabel = new Label("URL:");
         urlField = new TextField();
         urlField.setPromptText("https://myrient.erista.me/files/...");
@@ -119,11 +120,11 @@ public class MainViewController {
 
         // Download folder selection
         HBox folderBox = new HBox(10);
-        folderBox.setAlignment(Pos.CENTER_LEFT); // Align elements in the folder selection
+        folderBox.setAlignment(Pos.CENTER_LEFT);
         Label folderLabel = new Label("Download Folder:");
         downloadFolderField = new TextField();
         downloadFolderField.setPromptText("Select download folder using Browse button");
-        downloadFolderField.setEditable(false); // Make read-only
+        downloadFolderField.setEditable(false);
         downloadFolderField.setPrefWidth(400);
         Button browseButton = new Button("Browse");
         browseButton.setOnAction(e -> browseFolder());
@@ -131,7 +132,7 @@ public class MainViewController {
 
         // Thread count and file extension
         HBox optionsBox = new HBox(20);
-        optionsBox.setAlignment(Pos.CENTER_LEFT); // Align elements in the options box
+        optionsBox.setAlignment(Pos.CENTER_LEFT);
 
         // Thread count
         Label threadLabel = new Label("Parallel Downloads:");
@@ -139,23 +140,60 @@ public class MainViewController {
         threadCountSpinner.setEditable(true);
         threadCountSpinner.setPrefWidth(80);
 
-        // File extension selector
+        // File extension selector - with common extensions and auto select
         Label extLabel = new Label("File Extension:");
+
+        // Create the extension selector with Auto Select and common extensions
         fileExtensionSelector = new ComboBox<>();
-        fileExtensionSelector.setItems(FXCollections.observableArrayList(
+        List<String> initialExtensions = new ArrayList<>();
+        initialExtensions.add("(Auto Select)");
+        initialExtensions.addAll(Arrays.asList(
                 ".zip", ".7z", ".rar", ".iso", ".bin", ".rom"
         ));
-        fileExtensionSelector.setEditable(true);
-        fileExtensionSelector.getSelectionModel().select(0);
+        fileExtensionSelector.setItems(FXCollections.observableArrayList(initialExtensions));
+        fileExtensionSelector.getSelectionModel().select(0); // Select Auto Select by default
+        fileExtensionSelector.setDisable(false); // Enabled on first run
+        fileExtensionSelector.setPrefWidth(150);
+
+        // Custom extension checkbox and field
+        customExtensionCheckbox = new CheckBox("Custom Extension");
+        customExtensionCheckbox.setDisable(true); // Disabled when Auto Select is chosen
+        customExtensionField = new TextField();
+        customExtensionField.setPrefWidth(100);
+        customExtensionField.setPromptText(".ext");
+        customExtensionField.setDisable(true);
+
+        // Connect checkbox to enable/disable the custom field
+        customExtensionCheckbox.selectedProperty().addListener((obs, oldVal, newVal) -> {
+            customExtensionField.setDisable(!newVal);
+            fileExtensionSelector.setDisable(newVal);
+        });
+
+        // Add listener to the fileExtensionSelector to disable/enable custom checkbox
+        fileExtensionSelector.valueProperty().addListener((obs, oldVal, newVal) -> {
+            boolean isAutoSelect = newVal != null && newVal.equals("(Auto Select)");
+            customExtensionCheckbox.setDisable(isAutoSelect);
+
+            // If switching to Auto Select, uncheck the custom extension checkbox
+            if (isAutoSelect && customExtensionCheckbox.isSelected()) {
+                customExtensionCheckbox.setSelected(false);
+            }
+        });
+
+        // Create a container for the extension-related components
+        extensionContainer = new HBox(10);
+        extensionContainer.setAlignment(Pos.CENTER_LEFT);
+        extensionContainer.getChildren().addAll(
+                extLabel, fileExtensionSelector, customExtensionCheckbox, customExtensionField
+        );
 
         // Add components to options box
         optionsBox.getChildren().addAll(
-                threadLabel, threadCountSpinner,
-                extLabel, fileExtensionSelector
+                threadLabel, threadCountSpinner
         );
 
         // Add all to panel
-        panel.getChildren().addAll(urlBox, folderBox, optionsBox);
+        panel.getChildren().addAll(urlBox, folderBox, optionsBox, extensionContainer);
 
         return panel;
     }
@@ -216,6 +254,17 @@ public class MainViewController {
 
                 executorService.submit(() -> {
                     String region = getSelectedRegion();
+                    // Use the selected extension for the search
+                    String extension = getSelectedExtension();
+
+                    // Reconnect with the selected extension if needed
+                    if (!model.hasConnectionWithExtension(extension)) {
+                        String url = urlField.getText().trim();
+                        if (!url.isEmpty()) {
+                            model.connectToUrl(url, extension);
+                        }
+                    }
+
                     List<RomFile> results = model.searchRoms(searchTerm, region);
 
                     Platform.runLater(() -> {
@@ -369,12 +418,89 @@ public class MainViewController {
         loadingIndicator.setVisible(true);
         updateStatus("Connecting to " + url + "...");
 
+        // Get the current selected extension before running in background thread
+        String currentSelection = fileExtensionSelector.getValue();
+        boolean isAutoSelect = currentSelection != null && currentSelection.equals("(Auto Select)");
+
+        // Determine if we should use auto-detection
+        boolean useAutoDetection = isAutoSelect;
+
         executorService.submit(() -> {
-            boolean success = model.connectToUrl(url, fileExtensionSelector.getValue());
+            // Default extension is empty (will be interpreted as auto-select)
+            String extensionToUse = "";
+            boolean connectionSuccess = false;
+
+            // If not using auto-select, use the selected extension
+            if (!useAutoDetection) {
+                // Extract just the extension part if it contains "(Auto Detected)"
+                if (currentSelection.contains(" (Auto Detected)")) {
+                    extensionToUse = currentSelection.replace(" (Auto Detected)", "");
+                } else {
+                    extensionToUse = currentSelection;
+                }
+
+                // Connect using the selected extension
+                connectionSuccess = model.connectToUrl(url, extensionToUse);
+            } else {
+                // Using auto-select, try auto-detection
+                String detectedExtension = detectMostCommonExtension(url);
+
+                if (!detectedExtension.isEmpty()) {
+                    // Use the detected extension
+                    extensionToUse = detectedExtension;
+                    connectionSuccess = model.connectToUrl(url, extensionToUse);
+                }
+
+                // If no extension detected or connection failed, try with auto-select
+                if (detectedExtension.isEmpty() || !connectionSuccess) {
+                    extensionToUse = "";
+                    connectionSuccess = model.connectToUrl(url, "");
+                }
+            }
+
+            // Final list of extensions for the UI
+            List<String> extensionOptions = new ArrayList<>();
+
+            // Add auto-select option
+            extensionOptions.add("(Auto Select)");
+
+            // Add the detected extension with "(Auto Detected)" label if we have one
+            if (!extensionToUse.isEmpty() && useAutoDetection) {
+                extensionOptions.add(extensionToUse + " (Auto Detected)");
+            }
+
+            // Add common extensions
+            extensionOptions.addAll(Arrays.asList(
+                    ".zip", ".7z", ".rar", ".iso", ".bin", ".rom"
+            ));
+
+            // Remove duplicates while preserving order
+            List<String> uniqueExtensions = new ArrayList<>(new LinkedHashSet<>(extensionOptions));
+
+            final boolean finalSuccess = connectionSuccess;
+            final List<String> finalExtensionList = uniqueExtensions;
+            final String finalExtensionToUse = extensionToUse;
+            final boolean finalUseAutoDetection = useAutoDetection;
 
             Platform.runLater(() -> {
                 loadingIndicator.setVisible(false);
-                if (success) {
+
+                // Update the extension dropdown
+                fileExtensionSelector.setItems(FXCollections.observableArrayList(finalExtensionList));
+
+                // Select based on what was used for connection
+                if (!finalUseAutoDetection) {
+                    // Keep user's selection
+                    fileExtensionSelector.getSelectionModel().select(currentSelection);
+                } else if (!finalExtensionToUse.isEmpty()) {
+                    // Select the detected extension
+                    fileExtensionSelector.getSelectionModel().select(finalExtensionToUse + " (Auto Detected)");
+                } else {
+                    // Fall back to auto select
+                    fileExtensionSelector.getSelectionModel().select(0);
+                }
+
+                if (finalSuccess) {
                     updateStatus("Connected. Found " + model.getRomFilesCount() + " files.");
                 } else {
                     updateStatus("Connection failed. Check the URL and try again.");
@@ -382,6 +508,91 @@ public class MainViewController {
                 }
             });
         });
+    }
+
+    private String detectMostCommonExtension(String url) {
+        try {
+            // Create a connection to the URL
+            java.net.URL urlObj = new java.net.URL(url);
+            java.net.HttpURLConnection conn = (java.net.HttpURLConnection) urlObj.openConnection();
+            conn.setRequestMethod("GET");
+            conn.connect();
+
+            // Check if connection was successful
+            if (conn.getResponseCode() != 200) {
+                return "";
+            }
+
+            // Read the first part of the page content
+            try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(conn.getInputStream()))) {
+
+                StringBuilder content = new StringBuilder();
+                String line;
+                int lineCount = 0;
+
+                // Only read the first 100 lines to avoid large pages
+                while ((line = reader.readLine()) != null && lineCount < 100) {
+                    content.append(line);
+                    lineCount++;
+                }
+
+                // Use regex to find file extensions in href attributes
+                java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("href=\"[^\"]*?(\\.[a-zA-Z0-9]{1,4})\"");
+                java.util.regex.Matcher matcher = pattern.matcher(content);
+
+                // Count occurrences of each extension
+                Map<String, Integer> extensionCounts = new HashMap<>();
+
+                while (matcher.find()) {
+                    String ext = matcher.group(1).toLowerCase();
+                    extensionCounts.put(ext, extensionCounts.getOrDefault(ext, 0) + 1);
+                }
+
+                // Find the most common extension
+                String mostCommonExt = "";
+                int maxCount = 0;
+
+                for (Map.Entry<String, Integer> entry : extensionCounts.entrySet()) {
+                    if (entry.getValue() > maxCount) {
+                        maxCount = entry.getValue();
+                        mostCommonExt = entry.getKey();
+                    }
+                }
+
+                return mostCommonExt;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return "";
+    }
+
+    private String getSelectedExtension() {
+        // If custom extension is checked, use the custom field
+        if (customExtensionCheckbox.isSelected()) {
+            String customExt = customExtensionField.getText().trim();
+            if (!customExt.startsWith(".") && !customExt.isEmpty()) {
+                customExt = "." + customExt;
+            }
+            return customExt;
+        }
+
+        // Otherwise use the dropdown
+        String selected = fileExtensionSelector.getValue();
+
+        // Handle auto select
+        if (selected == null || selected.equals("(Auto Select)")) {
+            return "";
+        }
+
+        // Extract just the extension part from the dropdown value
+        if (selected.contains(" (Auto Detected)")) {
+            selected = selected.replace(" (Auto Detected)", "");
+        }
+
+        return selected;
     }
 
     private void browseFolder() {
