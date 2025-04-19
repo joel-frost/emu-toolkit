@@ -51,13 +51,6 @@ public class SearchView {
         HBox searchBox = new HBox(10);
         searchBox.setAlignment(Pos.CENTER_LEFT);
 
-        // Region selector
-        Label regionLabel = new Label("Region:");
-        ComboBox<String> regionSelector = new ComboBox<>();
-        regionSelector.setPrefWidth(100);
-        regionSelector.itemsProperty().bind(searchViewModel.availableRegionsProperty());
-        regionSelector.valueProperty().bindBidirectional(searchViewModel.selectedRegionProperty());
-
         // Search field
         TextField searchField = new TextField();
         searchField.setPrefWidth(400);
@@ -69,7 +62,7 @@ public class SearchView {
         searchButton.setDefaultButton(true);
         searchButton.setOnAction(e -> searchViewModel.performSearch());
 
-        searchBox.getChildren().addAll(regionLabel, regionSelector, searchField, searchButton);
+        searchBox.getChildren().addAll(searchField, searchButton);
         return searchBox;
     }
 

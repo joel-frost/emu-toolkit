@@ -24,6 +24,7 @@ public class ConfigView {
     private Spinner<Integer> threadCountSpinner;
     private CheckBox customExtensionCheckbox;
     private TextField customExtensionField;
+    private ComboBox<String> regionSelector;
 
     public ConfigView(ConfigViewModel viewModel) {
         this.viewModel = viewModel;
@@ -39,7 +40,7 @@ public class ConfigView {
         // Download folder selection
         HBox folderBox = createFolderBox();
 
-        // Thread count and options
+        // Thread count and region options
         HBox optionsBox = createOptionsBox();
 
         // File extension selection
@@ -102,7 +103,14 @@ public class ConfigView {
         threadCountSpinner.setPrefWidth(80);
         threadCountSpinner.getValueFactory().valueProperty().bindBidirectional(viewModel.parallelDownloadsProperty().asObject());
 
-        optionsBox.getChildren().addAll(threadLabel, threadCountSpinner);
+        // Region selector
+        Label regionLabel = new Label("Region:");
+        regionSelector = new ComboBox<>();
+        regionSelector.setPrefWidth(100);
+        regionSelector.itemsProperty().bind(viewModel.availableRegionsProperty());
+        regionSelector.valueProperty().bindBidirectional(viewModel.selectedRegionProperty());
+
+        optionsBox.getChildren().addAll(threadLabel, threadCountSpinner, regionLabel, regionSelector);
         return optionsBox;
     }
 

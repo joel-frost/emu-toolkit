@@ -1,6 +1,7 @@
 package com.rom.scraper.viewmodel;
 
 import com.rom.scraper.service.RomScraperService;
+import javafx.application.Platform;
 import javafx.beans.property.*;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -28,6 +29,11 @@ public class ConfigViewModel {
     private final StringProperty statusMessageProperty = new SimpleStringProperty("Ready");
     private final ListProperty<String> availableExtensionsProperty = new SimpleListProperty<>(FXCollections.observableArrayList());
 
+    // Region selection properties
+    private final ObjectProperty<String> selectedRegionProperty = new SimpleObjectProperty<>("Any");
+    private final ListProperty<String> availableRegionsProperty = new SimpleListProperty<>(
+            FXCollections.observableArrayList(Arrays.asList("Any", "USA", "EUR", "JPN")));
+
     public ConfigViewModel(RomScraperService romScraperService) {
         this.romScraperService = romScraperService;
 
@@ -41,9 +47,9 @@ public class ConfigViewModel {
 
         // Bind service loading/status to view model properties
         romScraperService.loadingProperty().addListener((obs, oldVal, newVal) ->
-                this.loadingProperty.set(newVal));
+                Platform.runLater(() -> this.loadingProperty.set(newVal)));
         romScraperService.statusMessageProperty().addListener((obs, oldVal, newVal) ->
-                this.statusMessageProperty.set(newVal));
+                Platform.runLater(() -> this.statusMessageProperty.set(newVal)));
     }
 
     public void connectToUrl(Consumer<Boolean> callback) {
@@ -66,41 +72,54 @@ public class ConfigViewModel {
 
                 // Connect with the detected extension
                 if (!detectedExtension.isEmpty()) {
-                    connectWithExtension(url, detectedExtension, callback);
-
-                    // Update the extensions list to include the detected one
-                    updateExtensionsWithDetected(detectedExtension);
+                    connectWithExtension(url, detectedExtension, success -> {
+                        // Update the extensions list on the JavaFX application thread
+                        if (success) {
+                            Platform.runLater(() -> {
+                                updateExtensionsWithDetected(detectedExtension);
+                                callback.accept(true);
+                            });
+                        } else {
+                            Platform.runLater(() -> callback.accept(false));
+                        }
+                    });
                 } else {
                     // If no extension detected, connect with empty extension
-                    connectWithExtension(url, "", callback);
+                    connectWithExtension(url, "", result -> {
+                        Platform.runLater(() -> callback.accept(result));
+                    });
                 }
             });
             detectionThread.start();
         } else {
             // Connect with the selected/custom extension
-            connectWithExtension(url, extension, callback);
+            connectWithExtension(url, extension, result -> {
+                Platform.runLater(() -> callback.accept(result));
+            });
         }
     }
 
     private void connectWithExtension(String url, String extension, Consumer<Boolean> callback) {
         romScraperService.connectToUrl(url, extension, success -> {
-            if (success) {
-                // Successfully connected
-                callback.accept(true);
-            } else {
-                // Connection failed
-                callback.accept(false);
-            }
+            callback.accept(success);
         });
     }
 
     private void updateExtensionsWithDetected(String detectedExtension) {
+        // This method should only be called from the JavaFX application thread
+        if (!Platform.isFxApplicationThread()) {
+            Platform.runLater(() -> updateExtensionsWithDetected(detectedExtension));
+            return;
+        }
+
         List<String> currentExtensions = new ArrayList<>(availableExtensionsProperty.get());
         // Add the detected extension with a label
         currentExtensions.add(1, detectedExtension + " (Auto Detected)");
 
         // Remove duplicates while preserving order
         List<String> uniqueExtensions = new ArrayList<>(new LinkedHashSet<>(currentExtensions));
+
+        // Update the list
         availableExtensionsProperty.set(FXCollections.observableArrayList(uniqueExtensions));
 
         // Select the detected extension
@@ -133,23 +152,25 @@ public class ConfigViewModel {
         return selected;
     }
 
+    /**
+     * Gets the currently selected region, or null if "Any" is selected.
+     */
+    public String getSelectedRegion() {
+        String region = selectedRegionProperty.get();
+        return "Any".equals(region) ? null : region;
+    }
+
     public boolean folderIsInvalid() {
         String folder = downloadFolderProperty.get();
         if (folder == null || folder.isEmpty()) {
-            return false;
+            return true;
         }
 
         File dir = new File(folder);
         if (!dir.exists()) {
             boolean created = dir.mkdirs();
-            if (!created) {
-                return false;
-            }
-        } else if (!dir.isDirectory()) {
-            return false;
-        }
-
-        return true;
+            return !created;
+        } else return !dir.isDirectory();
     }
 
     // Getters and setters for properties
@@ -187,5 +208,13 @@ public class ConfigViewModel {
 
     public ListProperty<String> availableExtensionsProperty() {
         return availableExtensionsProperty;
+    }
+
+    public ObjectProperty<String> selectedRegionProperty() {
+        return selectedRegionProperty;
+    }
+
+    public ListProperty<String> availableRegionsProperty() {
+        return availableRegionsProperty;
     }
 }
