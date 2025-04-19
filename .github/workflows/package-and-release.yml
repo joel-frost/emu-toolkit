@@ -1,0 +1,99 @@
+name: Build, Package, and Release
+
+on:
+  push:
+    branches:
+      - releases/** # Only trigger on branches in the /releases/ folder
+
+jobs:
+  build-and-package:
+    name: Build and Package for Windows, macOS, and Linux
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+
+    steps:
+      # Step 1: Checkout the repository
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Step 2: Setup Java environment
+      - name: Set up Java
+        uses: actions/setup-java@v3
+        with:
+          java-version: 17
+          distribution: 'adopt'
+
+      # Step 3: Auto-increment project version
+      - name: Auto-increment project version
+        run: |
+          CURRENT_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          NEXT_VERSION=$(echo $CURRENT_VERSION | awk -F. '{$NF+=1; print $1"."$2"."$NF}')
+          mvn versions:set -DnewVersion=$NEXT_VERSION
+          mvn versions:commit
+
+      # Step 4: Build and package the application
+      - name: Build and Package
+        run: |
+          mvn clean package
+          mkdir -p build/installers
+
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            jpackage --type exe --input target/ --output build/installers \
+              --name RomScraper --main-jar target/rom-scraper-1.0-SNAPSHOT.jar \
+              --main-class com.rom.scraper.Launcher
+          elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
+            jpackage --type app-image --input target/ --output build/installers \
+              --name RomScraper --main-jar target/rom-scraper-1.0-SNAPSHOT.jar \
+              --main-class com.rom.scraper.Launcher
+          elif [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
+            jpackage --type deb --input target/ --output build/installers \
+              --name RomScraper --main-jar target/rom-scraper-1.0-SNAPSHOT.jar \
+              --main-class com.rom.scraper.Launcher
+            jpackage --type rpm --input target/ --output build/installers \
+              --name RomScraper --main-jar target/rom-scraper-1.0-SNAPSHOT.jar \
+              --main-class com.rom.scraper.Launcher
+          fi
+
+      # Step 5: Upload package artifacts
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: installers-${{ matrix.os }}
+          path: build/installers/
+
+  release:
+    name: Create GitHub Release
+    needs: build-and-package
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Checkout the repository
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Step 2: Get commit messages since last release
+      - name: Generate Release Description
+        id: generate_description
+        run: |
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 $(git rev-list --tags --max-count=1))
+          echo "Previous tag: $PREVIOUS_TAG"
+          COMMITS=$(git log $PREVIOUS_TAG..HEAD --oneline)
+          echo "Commits: $COMMITS"
+          echo "description=$COMMITS" >> $GITHUB_ENV
+
+      # Step 3: Create GitHub release
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          body: |
+            ## Changes since last release:
+            ${{ env.description }}
+          tag_name: ${{ github.ref_name }}
+          files: |
+            build/installers/*
+            target/rom-scraper-1.0-SNAPSHOT.jar
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
