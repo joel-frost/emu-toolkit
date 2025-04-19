@@ -122,7 +122,7 @@ jobs:
           mvn org.panteleyev:jpackage-maven-plugin:jpackage -Djpackage.type=app-image
 
       - name: Upload Windows artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: windows-artifact
           path: target/dist/RomScraper
@@ -149,7 +149,7 @@ jobs:
           mvn org.panteleyev:jpackage-maven-plugin:jpackage -Djpackage.type=app-image
 
       - name: Upload macOS artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: macos-artifact
           path: target/dist/RomScraper.app
@@ -176,7 +176,7 @@ jobs:
           mvn org.panteleyev:jpackage-maven-plugin:jpackage -Djpackage.type=app-image
 
       - name: Upload Linux artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: linux-artifact
           path: target/dist/RomScraper
