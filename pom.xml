@@ -3,8 +3,8 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.rom</groupId>
-    <artifactId>rom-scraper</artifactId>
+    <groupId>com.emu</groupId>
+    <artifactId>emu-toolkit</artifactId>
     <version>1.1.0</version>
 
     <properties>
@@ -12,7 +12,7 @@
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
         <javafx.version>17.0.2</javafx.version>
-        <main.class>com.rom.scraper.Launcher</main.class>
+        <main.class>com.emu.toolkit.Launcher</main.class>
     </properties>
 
     <dependencies>
@@ -135,9 +135,9 @@
                 <artifactId>jpackage-maven-plugin</artifactId>
                 <version>1.6.0</version>
                 <configuration>
-                    <name>RomScraper</name>
+                    <name>EmuToolkit</name>
                     <appVersion>${project.version}</appVersion>
-                    <vendor>com.rom</vendor>
+                    <vendor>com.emu</vendor>
                     <destination>${project.build.directory}/dist</destination>
                     <module>${main.class}</module>
                     <runtimeImage>${project.build.directory}/runtime-image</runtimeImage>

@@ -32,18 +32,18 @@ convert "$OUTPUT_DIR/icon_16.png" "$OUTPUT_DIR/icon_32.png" "$OUTPUT_DIR/icon_48
 echo "Creating macOS ICNS file..."
 
 # Create iconset directory structure
-mkdir -p "$OUTPUT_DIR/RomScraper.iconset"
+mkdir -p "$OUTPUT_DIR/EmuToolkit.iconset"
 
 # Copy and rename files according to macOS iconset format
-cp "$OUTPUT_DIR/icon_16.png" "$OUTPUT_DIR/RomScraper.iconset/icon_16x16.png"
-cp "$OUTPUT_DIR/icon_32.png" "$OUTPUT_DIR/RomScraper.iconset/icon_16x16@2x.png"
-cp "$OUTPUT_DIR/icon_32.png" "$OUTPUT_DIR/RomScraper.iconset/icon_32x32.png"
-cp "$OUTPUT_DIR/icon_64.png" "$OUTPUT_DIR/RomScraper.iconset/icon_32x32@2x.png"
-cp "$OUTPUT_DIR/icon_128.png" "$OUTPUT_DIR/RomScraper.iconset/icon_128x128.png"
-cp "$OUTPUT_DIR/icon_256.png" "$OUTPUT_DIR/RomScraper.iconset/icon_128x128@2x.png"
-cp "$OUTPUT_DIR/icon_256.png" "$OUTPUT_DIR/RomScraper.iconset/icon_256x256.png"
-cp "$OUTPUT_DIR/icon_512.png" "$OUTPUT_DIR/RomScraper.iconset/icon_256x256@2x.png"
-cp "$OUTPUT_DIR/icon_512.png" "$OUTPUT_DIR/RomScraper.iconset/icon_512x512.png"
+cp "$OUTPUT_DIR/icon_16.png" "$OUTPUT_DIR/EmuToolkit.iconset/icon_16x16.png"
+cp "$OUTPUT_DIR/icon_32.png" "$OUTPUT_DIR/EmuToolkit.iconset/icon_16x16@2x.png"
+cp "$OUTPUT_DIR/icon_32.png" "$OUTPUT_DIR/EmuToolkit.iconset/icon_32x32.png"
+cp "$OUTPUT_DIR/icon_64.png" "$OUTPUT_DIR/EmuToolkit.iconset/icon_32x32@2x.png"
+cp "$OUTPUT_DIR/icon_128.png" "$OUTPUT_DIR/EmuToolkit.iconset/icon_128x128.png"
+cp "$OUTPUT_DIR/icon_256.png" "$OUTPUT_DIR/EmuToolkit.iconset/icon_128x128@2x.png"
+cp "$OUTPUT_DIR/icon_256.png" "$OUTPUT_DIR/EmuToolkit.iconset/icon_256x256.png"
+cp "$OUTPUT_DIR/icon_512.png" "$OUTPUT_DIR/EmuToolkit.iconset/icon_256x256@2x.png"
+cp "$OUTPUT_DIR/icon_512.png" "$OUTPUT_DIR/EmuToolkit.iconset/icon_512x512.png"
 
 # Try to create ICNS file using Linux tools first
 if command -v png2icns &> /dev/null; then
@@ -55,7 +55,7 @@ if command -v png2icns &> /dev/null; then
   echo "ICNS file created using png2icns"
 # Fall back to macOS iconutil if available
 elif command -v iconutil &> /dev/null; then
-  iconutil -c icns "$OUTPUT_DIR/RomScraper.iconset" -o "$OUTPUT_DIR/icon.icns"
+  iconutil -c icns "$OUTPUT_DIR/EmuToolkit.iconset" -o "$OUTPUT_DIR/icon.icns"
   echo "ICNS file created using iconutil"
 else
   echo "Neither png2icns nor iconutil found. You'll need to install icnsutils package or create the ICNS file manually."

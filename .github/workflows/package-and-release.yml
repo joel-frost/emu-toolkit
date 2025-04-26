@@ -170,12 +170,12 @@ jobs:
           $mainJar = Get-ChildItem -Path "target" -Filter "*.jar" | Where-Object { !$_.Name.Contains("sources") -and !$_.Name.Contains("javadoc") } | Select-Object -ExpandProperty Name -Last 1
           
           # Use jpackage directly with icon
-          jpackage --name RomScraper `
+          jpackage --name EmuToolkit `
             --app-version ${{ needs.update-version.outputs.version }} `
             --input target\jpackage-input `
             --dest target\dist `
             --main-jar $mainJar `
-            --main-class com.rom.scraper.Launcher `
+            --main-class com.emu.toolkit.Launcher `
             --icon src\main\resources\icons\icon.ico `
             --type app-image
           
@@ -214,12 +214,12 @@ jobs:
           
           # Use jpackage directly with icon
           MAIN_JAR=$(find target -maxdepth 1 -name "*.jar" | head -1 | xargs basename)
-          jpackage --name RomScraper \
+          jpackage --name EmuToolkit \
             --app-version ${{ needs.update-version.outputs.version }} \
             --input target/jpackage-input \
             --dest target/dist \
             --main-jar $MAIN_JAR \
-            --main-class com.rom.scraper.Launcher \
+            --main-class com.emu.toolkit.Launcher \
             --icon src/main/resources/icons/icon.icns \
             --type app-image
           
@@ -258,12 +258,12 @@ jobs:
           
           # Use jpackage directly with icon
           MAIN_JAR=$(find target -maxdepth 1 -name "*.jar" | head -1 | xargs basename)
-          jpackage --name RomScraper \
+          jpackage --name EmuToolkit \
             --app-version ${{ needs.update-version.outputs.version }} \
             --input target/jpackage-input \
             --dest target/dist \
             --main-jar $MAIN_JAR \
-            --main-class com.rom.scraper.Launcher \
+            --main-class com.emu.toolkit.Launcher \
             --icon src/main/resources/icons/icon.png \
             --type app-image
           
@@ -298,19 +298,19 @@ jobs:
           mkdir -p release-files
           
           echo "Packaging JAR files..."
-          find artifacts/jar-artifact -name "*.jar" -exec cp {} release-files/rom-scraper-${VERSION}.jar \;
+          find artifacts/jar-artifact -name "*.jar" -exec cp {} release-files/emu-toolkit-${VERSION}.jar \;
           
           echo "Packaging Windows executable..."
           if [ -d "artifacts/windows-artifact" ]; then
             cd artifacts/windows-artifact
             ls -la
-            if [ -d "RomScraper" ]; then
-              echo "Found Windows RomScraper directory, zipping..."
-              zip -r ../../release-files/RomScraper-${VERSION}-windows.zip RomScraper
+            if [ -d "EmuToolkit" ]; then
+              echo "Found Windows EmuToolkit directory, zipping..."
+              zip -r ../../release-files/EmuToolkit-${VERSION}-windows.zip EmuToolkit
             else
-              echo "Windows RomScraper directory not found"
+              echo "Windows EmuToolkit directory not found"
               # Try to find it in case the path is different
-              find . -type d -name "RomScraper*" | xargs -I{} zip -r ../../release-files/RomScraper-${VERSION}-windows.zip {}
+              find . -type d -name "EmuToolkit*" | xargs -I{} zip -r ../../release-files/EmuToolkit-${VERSION}-windows.zip {}
             fi
             cd ../..
           fi
@@ -319,13 +319,13 @@ jobs:
           if [ -d "artifacts/macos-artifact" ]; then
             cd artifacts/macos-artifact
             ls -la
-            if [ -d "RomScraper.app" ]; then
-              echo "Found macOS RomScraper.app directory, zipping..."
-              zip -r ../../release-files/RomScraper-${VERSION}-macos.zip RomScraper.app
+            if [ -d "EmuToolkit.app" ]; then
+              echo "Found macOS EmuToolkit.app directory, zipping..."
+              zip -r ../../release-files/EmuToolkit-${VERSION}-macos.zip EmuToolkit.app
             else
-              echo "macOS RomScraper.app directory not found"
+              echo "macOS EmuToolkit.app directory not found"
               # Try to find it in case the path is different
-              find . -type d -name "*.app" | xargs -I{} zip -r ../../release-files/RomScraper-${VERSION}-macos.zip {}
+              find . -type d -name "*.app" | xargs -I{} zip -r ../../release-files/EmuToolkit-${VERSION}-macos.zip {}
             fi
             cd ../..
           fi
@@ -334,13 +334,13 @@ jobs:
           if [ -d "artifacts/linux-artifact" ]; then
             cd artifacts/linux-artifact
             ls -la
-            if [ -d "RomScraper" ]; then
-              echo "Found Linux RomScraper directory, creating tar.gz..."
-              tar -czf ../../release-files/RomScraper-${VERSION}-linux.tar.gz RomScraper
+            if [ -d "EmuToolkit" ]; then
+              echo "Found Linux EmuToolkit directory, creating tar.gz..."
+              tar -czf ../../release-files/EmuToolkit-${VERSION}-linux.tar.gz EmuToolkit
             else
-              echo "Linux RomScraper directory not found"
+              echo "Linux EmuToolkit directory not found"
               # Try to find it in case the path is different
-              find . -type d -name "RomScraper*" | xargs -I{} tar -czf ../../release-files/RomScraper-${VERSION}-linux.tar.gz {}
+              find . -type d -name "EmuToolkit*" | xargs -I{} tar -czf ../../release-files/EmuToolkit-${VERSION}-linux.tar.gz {}
             fi
             cd ../..
           fi
