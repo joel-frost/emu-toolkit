@@ -17,6 +17,7 @@ import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
+import javafx.util.StringConverter;
 
 import java.util.List;
 
@@ -39,6 +40,8 @@ public class MainView {
     private ComboBox<PlatformConfig> platformSelector;
     private CheckBox advancedModeCheckbox;
     private Label advancedModeExplanation;
+    private VBox topPanel;
+    private Label platformLabel;
 
     public MainView(
             ConfigViewModel configViewModel,
@@ -99,28 +102,6 @@ public class MainView {
         Scene scene = new Scene(root, 800, 800);
         primaryStage.setScene(scene);
 
-        // Handle menu items
-        Menu fileMenu = new Menu("File");
-        MenuItem settingsMenuItem = new MenuItem("Settings");
-        settingsMenuItem.setOnAction(e -> {
-            SettingsView settingsView = new SettingsView(appConfig, configService);
-            settingsView.showSettings(primaryStage);
-
-            // Refresh UI after settings change
-            refreshAfterSettingsChange();
-        });
-
-        MenuItem exitMenuItem = new MenuItem("Exit");
-        exitMenuItem.setOnAction(e -> Platform.exit());
-
-        fileMenu.getItems().addAll(settingsMenuItem, new SeparatorMenuItem(), exitMenuItem);
-
-        MenuBar menuBar = new MenuBar();
-        menuBar.getMenus().add(fileMenu);
-
-        // Add menu bar to root
-        root.setTop(new VBox(menuBar, topContainer));
-
         // Show setup wizard if needed
         if (!appConfig.isWizardShown()) {
             Platform.runLater(() -> {
@@ -136,17 +117,61 @@ public class MainView {
     }
 
     private VBox createTopPanel() {
-        VBox topPanel = new VBox(10);
+        topPanel = new VBox(10);  // Use the class member instead of local variable
         topPanel.setPadding(new Insets(5));
 
         // Platform selection row
         HBox platformRow = new HBox(10);
         platformRow.setAlignment(Pos.CENTER_LEFT);
 
-        Label platformLabel = new Label("Platform:");
+        platformLabel = new Label("Platform:");  // Use the class member
+        // Make platform label visibility bind to advanced mode
+        platformLabel.setVisible(!appConfig.isAdvancedMode());
+        platformLabel.setManaged(!appConfig.isAdvancedMode());
 
         // Create platform selector
         platformSelector = new ComboBox<>();
+
+        // Set up cell factory to display platform name instead of object reference
+        platformSelector.setCellFactory(param -> new ListCell<PlatformConfig>() {
+            @Override
+            protected void updateItem(PlatformConfig item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                } else {
+                    setText(item.getName());
+                }
+            }
+        });
+
+        // Also need to set up button cell to display platform name
+        platformSelector.setButtonCell(new ListCell<PlatformConfig>() {
+            @Override
+            protected void updateItem(PlatformConfig item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                } else {
+                    setText(item.getName());
+                }
+            }
+        });
+
+        // Set up converter to display platform name when using the ComboBox
+        platformSelector.setConverter(new StringConverter<PlatformConfig>() {
+            @Override
+            public String toString(PlatformConfig platform) {
+                return platform == null ? null : platform.getName();
+            }
+
+            @Override
+            public PlatformConfig fromString(String string) {
+                // This is not needed for our use case
+                return null;
+            }
+        });
+
         updatePlatformSelector();
 
         // Set default selection if available
@@ -162,6 +187,13 @@ public class MainView {
 
                 // Auto-connect to the selected platform's URL
                 configViewModel.urlProperty().set(selected.getUrl());
+
+                // Set the region for this platform
+                String platformRegion = selected.getDefaultRegion();
+                if (platformRegion != null && !platformRegion.isEmpty()) {
+                    configViewModel.selectedRegionProperty().set(platformRegion);
+                }
+
                 configViewModel.connectToUrl(success -> {
                     if (!success) {
                         showErrorAlert("Connection Failed",
@@ -285,15 +317,21 @@ public class MainView {
             platformSelector.setManaged(!advancedMode);
         }
 
+        // Update platform label visibility
+        if (platformLabel != null) {
+            platformLabel.setVisible(!advancedMode);
+            platformLabel.setManaged(!advancedMode);
+        }
+
         if (advancedModeExplanation != null) {
             advancedModeExplanation.setVisible(advancedMode);
             advancedModeExplanation.setManaged(advancedMode);
         }
 
         // Update the config panel if it exists
-        if (configView != null) {
+        if (configView != null && advancedModeCheckbox != null && advancedModeCheckbox.getScene() != null) {
             BorderPane root = (BorderPane) advancedModeCheckbox.getScene().getRoot();
-            VBox topContainer = (VBox) ((VBox) root.getTop()).getChildren().get(1);
+            VBox topContainer = (VBox) root.getTop();
 
             // Find the config panel
             if (topContainer.getChildren().size() > 1) {

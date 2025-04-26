@@ -77,6 +77,7 @@ public class ConfigPersistenceService {
                     if (platform != null) {
                         platform.setUrl(platformMap.get("url"));
                         platform.setFileExtension(platformMap.getOrDefault("extension", ""));
+                        platform.setDefaultRegion(platformMap.getOrDefault("defaultRegion", "Any"));
                     }
                 }
             }

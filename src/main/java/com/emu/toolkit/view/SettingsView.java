@@ -187,6 +187,9 @@ public class SettingsView {
     /**
      * Create the platforms configuration pane
      */
+    /**
+     * Create the platforms configuration pane
+     */
     private Pane createPlatformsPane() {
         VBox content = new VBox(20);
         content.setPadding(new Insets(20));
@@ -212,7 +215,7 @@ public class SettingsView {
             PlatformConfig platform = event.getRowValue();
             platform.setUrl(event.getNewValue());
         });
-        urlColumn.setPrefWidth(350);
+        urlColumn.setPrefWidth(300);
 
         // Extension column
         TableColumn<PlatformConfig, String> extensionColumn = new TableColumn<>("File Extension");
@@ -222,7 +225,39 @@ public class SettingsView {
             PlatformConfig platform = event.getRowValue();
             platform.setFileExtension(event.getNewValue());
         });
-        extensionColumn.setPrefWidth(120);
+        extensionColumn.setPrefWidth(100);
+
+        // Region column
+        TableColumn<PlatformConfig, String> regionColumn = new TableColumn<>("Default Region");
+        regionColumn.setCellValueFactory(cellData -> cellData.getValue().defaultRegionProperty());
+
+        // Create a cell factory for the region column with a ComboBox
+        regionColumn.setCellFactory(column -> new TableCell<PlatformConfig, String>() {
+            private final ComboBox<String> comboBox = new ComboBox<>();
+
+            {
+                comboBox.getItems().addAll("Any", "USA", "EUR", "JPN");
+                comboBox.setOnAction(event -> {
+                    PlatformConfig platform = getTableRow().getItem();
+                    if (platform != null) {
+                        platform.setDefaultRegion(comboBox.getValue());
+                        commitEdit(comboBox.getValue());
+                    }
+                });
+            }
+
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty) {
+                    setGraphic(null);
+                } else {
+                    comboBox.setValue(item);
+                    setGraphic(comboBox);
+                }
+            }
+        });
+        regionColumn.setPrefWidth(120);
 
         // Status column - shows if platform is configured
         TableColumn<PlatformConfig, Boolean> statusColumn = new TableColumn<>("Status");
@@ -244,7 +279,7 @@ public class SettingsView {
         });
         statusColumn.setPrefWidth(100);
 
-        platformTable.getColumns().addAll(nameColumn, urlColumn, extensionColumn, statusColumn);
+        platformTable.getColumns().addAll(nameColumn, urlColumn, extensionColumn, regionColumn, statusColumn);
         platformTable.setItems(appConfig.getPlatforms());
 
         // Add buttons for editing platforms
@@ -268,6 +303,7 @@ public class SettingsView {
             if (selected != null) {
                 selected.setUrl("");
                 selected.setFileExtension("");
+                selected.setDefaultRegion("Any");
                 platformTable.refresh();
             }
         });
@@ -282,7 +318,7 @@ public class SettingsView {
 
         // Instructions
         Label instructionsLabel = new Label(
-                "Double-click URL or File Extension fields to edit. Each platform requires a valid repository URL."
+                "Double-click URL or File Extension fields to edit. Select a default region for each platform."
         );
         instructionsLabel.setWrapText(true);
 

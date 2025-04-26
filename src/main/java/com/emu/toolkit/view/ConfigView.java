@@ -49,7 +49,7 @@ public class ConfigView {
 
         Label urlLabel = new Label("URL:");
         urlField = new TextField();
-        urlField.setPromptText("https://myrient.erista.me/files/...");
+        urlField.setPromptText("https://somerepo.me/files/..");
         urlField.setPrefWidth(400);
         urlField.textProperty().bindBidirectional(viewModel.urlProperty());
 

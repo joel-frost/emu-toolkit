@@ -56,8 +56,8 @@ public class ConfigViewModel {
 
     public void connectToUrl(Consumer<Boolean> callback) {
         String url = urlProperty.get();
-        if (url == null || url.isEmpty() || !url.contains("myrient")) {
-            statusMessageProperty.set("Invalid URL. Please enter a valid Myrient URL.");
+        if (url == null || url.isEmpty()) {
+            statusMessageProperty.set("Invalid URL. Please enter a valid URL.");
             callback.accept(false);
             return;
         }

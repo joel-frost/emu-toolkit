@@ -12,6 +12,7 @@ public class PlatformConfig {
     @Getter private final String name;
     private final StringProperty url = new SimpleStringProperty("");
     private final StringProperty fileExtension = new SimpleStringProperty("");
+    private final StringProperty defaultRegion = new SimpleStringProperty("Any");
 
     public PlatformConfig(String id, String name) {
         this.id = id;
@@ -23,6 +24,14 @@ public class PlatformConfig {
         this.name = name;
         this.url.set(url);
         this.fileExtension.set(fileExtension);
+    }
+
+    public PlatformConfig(String id, String name, String url, String fileExtension, String defaultRegion) {
+        this.id = id;
+        this.name = name;
+        this.url.set(url);
+        this.fileExtension.set(fileExtension);
+        this.defaultRegion.set(defaultRegion);
     }
 
     public String getUrl() {
@@ -47,6 +56,18 @@ public class PlatformConfig {
 
     public StringProperty fileExtensionProperty() {
         return fileExtension;
+    }
+
+    public String getDefaultRegion() {
+        return defaultRegion.get();
+    }
+
+    public void setDefaultRegion(String region) {
+        this.defaultRegion.set(region);
+    }
+
+    public StringProperty defaultRegionProperty() {
+        return defaultRegion;
     }
 
     public boolean isConfigured() {

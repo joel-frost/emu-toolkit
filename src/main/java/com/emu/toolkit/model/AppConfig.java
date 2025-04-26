@@ -88,6 +88,9 @@ public class AppConfig {
     /**
      * Convert the configuration to a Map for JSON serialization
      */
+    /**
+     * Convert the configuration to a Map for JSON serialization
+     */
     public Map<String, Object> toMap() {
         Map<String, Object> map = new HashMap<>();
         map.put("advancedMode", advancedMode);
@@ -101,6 +104,7 @@ public class AppConfig {
                 platformMap.put("id", platform.getId());
                 platformMap.put("url", platform.getUrl());
                 platformMap.put("extension", platform.getFileExtension());
+                platformMap.put("defaultRegion", platform.getDefaultRegion());
                 platformList.add(platformMap);
             }
         }

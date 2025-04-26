@@ -248,7 +248,7 @@ public class SetupWizardView {
         // URL input
         Label urlLabel = new Label("Enter the repository URL for " + platform.getName() + ":");
         TextField urlField = new TextField(platform.getUrl());
-        urlField.setPromptText("https://myrient.erista.me/files/...");
+        urlField.setPromptText("https://somerepo.me/files/..");
         urlField.setPrefWidth(500);
 
         // File extension input
